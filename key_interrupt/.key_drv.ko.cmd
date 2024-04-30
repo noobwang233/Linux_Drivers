@@ -1,1 +1,0 @@
-cmd_/home/wta3wx/Linux/IMX6/drivers/key_interrupt/key_drv.ko := arm-linux-gnueabihf-ld -EL -r  -T ./scripts/module-common.lds --build-id  -o /home/wta3wx/Linux/IMX6/drivers/key_interrupt/key_drv.ko /home/wta3wx/Linux/IMX6/drivers/key_interrupt/key_drv.o /home/wta3wx/Linux/IMX6/drivers/key_interrupt/key_drv.mod.o
