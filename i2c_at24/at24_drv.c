@@ -11,7 +11,7 @@
 #include <linux/miscdevice.h> //使用miscdev
 #include <linux/delay.h>      //usleep_range 头文件
 #include "linux/printk.h"
-#include "test_at24.h" 
+#include "at24_drv.h" 
 
 /* macro definition*/
 #define AT24_DEV_COUNT 1
