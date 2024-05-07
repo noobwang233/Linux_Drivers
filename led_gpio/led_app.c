@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
 	/* 1. 判断参数 */
     if(argc != 3)
     {
-        printf("Usage: %s <dev> <on | off>\n", argv[0]);
+        printf("Usage: %s <led_dev> <on | off>\n", argv[0]);
         return -1;
     }
 
