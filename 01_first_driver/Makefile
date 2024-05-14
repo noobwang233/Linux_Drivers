@@ -21,12 +21,13 @@ kernel_modules:
 	export ARCH=arm
 	export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) M=$(CURRENT_PATH) modules
-copy:
-	rm -rf  $(OUTPUT_DIR)
-	mkdir $(OUTPUT_DIR)
 	cp $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb $(OUTPUT_DIR)/ -f
 	cp $(DIRVER_NAME).ko $(OUTPUT_DIR)/
+app:
 	arm-linux-gnueabihf-gcc -o $(APP_NAME) $(APP_NAME).c
 	cp $(APP_NAME)  $(OUTPUT_DIR)/
+reinit:
+	rm -rf  $(OUTPUT_DIR)
+	mkdir $(OUTPUT_DIR)
 clean:
 	rm -rf *.o *app *.ko .*.o.d .*.cmd *.mod.* *.temp *.mod modules.order Module.symvers .tmp_versions
