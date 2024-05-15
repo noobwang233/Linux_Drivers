@@ -6,8 +6,6 @@
 #include "stdlib.h"
 #include "string.h"
 
-static char usrdata[] = {"usr data!"};
-
 int main(int argc, char *argv[])
 {
     int fd, retvalue, i;
@@ -16,7 +14,7 @@ int main(int argc, char *argv[])
 	/* 1. 判断参数 */
     if(argc != 3)
     {
-        printf("Usage: %s <led_dev> <on | off>\n", argv[0]);
+        printf("Usage: %s %s <on | off>\n", argv[0], argv[1]);
         return -1;
     }
 
