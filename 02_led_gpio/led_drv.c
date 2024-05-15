@@ -140,7 +140,7 @@ static int testdrv_probe(struct platform_device *device)
     }
     printk("find device node successfully! \n");
     /* 解析gpio属性 */
-    led_dev_0.gpio = of_get_named_gpio(led_dev_0.np, "gpios", 0);
+    led_dev_0.gpio = of_get_named_gpio(led_dev_0.np, "led-gpio", 0);
     if (led_dev_0.gpio <= 0)
     {
         pr_err("get gpio failed\n");
