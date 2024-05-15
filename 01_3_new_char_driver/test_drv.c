@@ -5,7 +5,7 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/cdev.h>      // cdev相关头文件
-#include <linux/device.h>    //设备号dev_t相关头文件
+#include <linux/device.h>    // device相关头文件
 #include <linux/errno.h>
 
 #define NEWCHRLED_CNT			1		  	/* 设备号个数 */
