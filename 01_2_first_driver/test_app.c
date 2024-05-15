@@ -16,7 +16,7 @@ int main(int argc, char *argv[])
 	/* 1. 判断参数 */
     if(((0 == strcmp(argv[2], "read")) && argc != 3) || ((0 == strcmp(argv[2], "write")) && argc != 4))
     {
-        printf("Usage: %s <test_dev> <read | write> [0 | 1]\n", argv[0]);
+        printf("Usage: %s %s <read | write> [0 | 1]\r\n", argv[0], argv[1]);
         return -1;
     }
 
@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
 	fd = open(argv[1], O_RDWR);
 	if (fd == -1)
 	{
-		printf("Can't open file %s\n", argv[1]);
+		printf("Can't open file %s\r\n", argv[1]);
 		return -1;
 	}
 
@@ -33,24 +33,24 @@ int main(int argc, char *argv[])
     {
         /* 4.读文件 */
         read(fd,&status,1);
-        printf("read dev data %d", status);
+        printf("read dev data %d\r\n", status);
     }
     else
     {
         /* 5. 写文件 */
-        if (0 == strcmp(argv[2], "1"))
+        if (0 == strcmp(argv[3], "1"))
         {
             status = 1;
             write(fd, &status, 1);
         }
-        else if (0 == strcmp(argv[2], "0"))
+        else if (0 == strcmp(argv[3], "0"))
         {
             status = 0;
             write(fd, &status, 1);
         }
         else
         {
-            printf("Usage: %s <test_dev> <read | write> [0 | 1]\n", argv[0]);
+            printf("Usage: %s %s <read | write> [0 | 1]\r\n", argv[0], argv[1]);
             return -1;
         }
     }
