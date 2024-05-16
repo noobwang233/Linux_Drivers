@@ -45,7 +45,7 @@ int main(int argc, char *argv[])
 //占用设备30s
 	for(i = 0; i < 30; i++)
 	{
-		sleep(5);
+		sleep(1);
 		printf("delay %d s\r\n", i);
 	}
     /* 关闭设备 */

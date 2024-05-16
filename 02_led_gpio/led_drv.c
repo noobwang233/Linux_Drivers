@@ -15,11 +15,11 @@
 
 #define LED_MISC_MINOR  233     /* LED_MISC的次设备号 */
 #define LED_MISC_NAME  "led_misc"  /* 驱动的主设备名称 */
-#define DEVICE_CNT    1        /* 设备数量 */
+// #define DEVICE_CNT    1        /* 设备数量 */
 
 struct led_dev_t
 {
-    struct device_node *np;
+    struct device_node *np; //设备树节点
     int gpio; /* led 所使用的 GPIO 编号 */
     struct miscdevice *misc;
     spinlock_t lock;
@@ -27,8 +27,9 @@ struct led_dev_t
     bool status;
 };
 static struct file_operations testdrv_fop;
-struct platform_driver test_platform_driver;
-/* MISC 设备结构体 */    /* 填充miscdevice结构体*/
+struct platform_driver test_platform_driver;    //平台设备驱动
+/* MISC 设备结构体 */    
+/* 填充miscdevice结构体*/
 static struct miscdevice led_miscdev = {
     .minor = LED_MISC_MINOR,
     .name = LED_MISC_NAME,
@@ -132,7 +133,7 @@ static int testdrv_probe(struct platform_device *device)
     led_dev_0.status = true;
     /* 注册字符设备驱动 */
     /* 查找设备结点 */
-    led_dev_0.np = of_find_compatible_node(NULL , NULL , "led_gpio");
+    led_dev_0.np = of_find_compatible_node(NULL , NULL , "my_led");
     if (led_dev_0.np == NULL)
     {
         pr_err("find device node failed\n");
@@ -219,7 +220,7 @@ static struct file_operations testdrv_fop = {
 };
 
 const struct of_device_id leds_of_match_table[] = {
-    {.compatible = "led_gpio",},
+    {.compatible = "my_led",},
     {},
 };
 
