@@ -1,3 +1,4 @@
+#include "linux/printk.h"
 #include <linux/kernel.h>
 #include <linux/types.h>   // 定义了ssize_t的头文件
 #include <linux/ide.h>
@@ -17,35 +18,26 @@
 #include <linux/poll.h>
 
 #define LED_MAJOR 235
-#define DEV_COUNT 4 // 最多4个led
+#define DEV_COUNT 1 // 最多4个led
 #define LED_ON 1
 #define LED_OFF 0
 #define LED_FREE 1
 #define LED_BUSY 0
-/*private date*/
-static u8 led_dev_count = 0; /* 设备计数 */
-static struct class *led_cls;//设备类
+
 /* device struct 设备结构体*/
 struct led_dev_t
 {
     dev_t dt;
     struct platform_device *led_pdev;
-    int gpio; /* led 所使用的 GPIO 编号 */
-    spinlock_t lock;
-    atomic_t status; /*设备状态*/
-    struct cdev *led_cdev; /*字符设备结构体*/
+    int gpio;                           /* led 所使用的 GPIO 编号 */
+    // spinlock_t lock;                    /* 读写自旋锁 */
+    atomic_t status;                    /* 设备状态*/
+    struct cdev *led_cdev;              /* 字符设备结构体*/
     struct class *cls;
     struct device *dev;
     wait_queue_head_t r_wait_list; //读等待队列
     wait_queue_head_t w_wait_list; //写等待队列
 };
-// match table
-const struct of_device_id leds_of_match_table[] = {
-    {.compatible = "led_gpio",},
-    {},
-};
-struct led_dev_t *led_devs[DEV_COUNT] = {0};
-
 
 /* private function declear */
 // file_operation functions
@@ -62,6 +54,19 @@ static void __exit led_drv_exit(void);
 //private led init and deinit function
 static int led_dev_init(struct led_dev_t **led_devs, u32 index);
 static int led_drv_deinit(struct led_dev_t **led_devs, u32 index);
+
+
+/*private date*/
+static u8 led_dev_count = 0; /* 设备计数 */
+static struct class *led_cls;//设备类
+
+// match table
+const struct of_device_id leds_of_match_table[] = {
+    {.compatible = "my_led",},
+    {},
+};
+struct led_dev_t *led_devs[DEV_COUNT] = {0};
+
 
 /* 驱动提供的文件操作结构体 */
 static struct file_operations led_drv_fop = {
@@ -88,6 +93,7 @@ static int led_drv_open(struct inode *inode, struct file *filp)
 {
     u32 index;
 
+    /* 根据设备号寻找对应的设备结构体 */
     for(index = 0; index < DEV_COUNT; index++)
     {
         if(led_devs[index] != NULL)
@@ -96,17 +102,19 @@ static int led_drv_open(struct inode *inode, struct file *filp)
                 break;
         }
     }
+
     if(index >= DEV_COUNT)
     {
         pr_err("can not find dev data in dev list!\n");
         return -EIO;
     }
+    /* 记录当前的设备结构体 */    
     filp->private_data = led_devs[index];
     printk("open device file: %s",led_devs[index]->led_pdev->name);
 
-    printk("led_drv open!\r\n");
     return 0;
 }
+
 unsigned int led_drv_poll(struct file *filp, struct poll_table_struct *wait)
 {
     unsigned int mask = 0;
@@ -121,6 +129,7 @@ unsigned int led_drv_poll(struct file *filp, struct poll_table_struct *wait)
     }
     return mask;
 }
+
 static int led_drv_release(struct inode *inode, struct file *filp)
 {
     printk("led_drv close!\r\n");
@@ -185,19 +194,23 @@ static ssize_t led_drv_write(struct file *filp, const char __user *buf, size_t c
         atomic_set(&led_dev->status, LED_FREE);//free led
         return -EIO;
     }
+    printk("cmd = %d\n", cmd);
     switch (cmd)
     {
-    case LED_ON:// GPIO_ACTIVE_LOW
-    case LED_OFF:
-        gpio_set_value(led_dev->gpio, cmd);
-        printk("led %s\n",(cmd == LED_ON ? "on" : "off"));
-        break;
-    default:
-        gpio_set_value(led_dev->gpio, (gpio_get_value(led_dev->gpio)==0? 1:0));
-        printk("led trigger\n");
-        break;
+        case LED_ON:// GPIO_ACTIVE_LOW
+        case LED_OFF:
+            printk("led %s\n",(cmd == LED_ON ? "on" : "off"));
+            cmd = (cmd == LED_ON) ? 0 : 1;
+            gpio_set_value(led_dev->gpio, cmd);
+            break;
+        default:
+            gpio_set_value(led_dev->gpio, (gpio_get_value(led_dev->gpio)==0? 1:0));
+            printk("led trigger\n");
+            break;
     }
     atomic_set(&led_dev->status, LED_FREE);
+
+    /* 释放设备后 唤醒等待列表 */
     if(waitqueue_active(&led_dev->w_wait_list))
     {
         wake_up_interruptible(&led_dev->w_wait_list);
@@ -213,7 +226,7 @@ static int led_dev_init(struct led_dev_t **led_devs, u32 index)
     struct device_node *np = led_devs[index]->led_pdev->dev.of_node;
 
     /* 获取gpio号 */
-    led_devs[index]->gpio = of_get_named_gpio(np, "gpios", 0);
+    led_devs[index]->gpio = of_get_named_gpio(np, "led-gpio", 0);
     if (led_devs[index]->gpio <= 0)
     {
         pr_err("get gpio failed\n");
@@ -222,7 +235,7 @@ static int led_dev_init(struct led_dev_t **led_devs, u32 index)
     printk("get gpio %d successfully! \n", led_devs[index]->gpio);
 
     /* 申请gpio */
-    retvalue = gpio_request(led_devs[index]->gpio, "led_gpio");
+    retvalue = gpio_request(led_devs[index]->gpio, led_devs[index]->led_pdev->name);
     if (retvalue != 0)
     {
         pr_err("request gpio failed\n");
@@ -289,8 +302,8 @@ static int led_dev_init(struct led_dev_t **led_devs, u32 index)
         goto delcdev;
     }
     printk("led_dev_%d create success!\r\n", index);
-    /* 初始化设备自旋锁*/
-    spin_lock_init(&led_devs[index]->lock);
+    /* 初始化设备原子变量 */
+    // spin_lock_init(&led_devs[index]->lock);
     atomic_set(&led_devs[index]->status, LED_FREE);
     /*初始化等待队列*/
     init_waitqueue_head(&led_devs[index]->r_wait_list);
@@ -351,7 +364,7 @@ static int led_drv_probe(struct platform_device *device)
     {
         return -EINVAL;
     }
-    printk("%s status oled!\n", device->name);
+    printk("%s status okey!\n", device->name);
     //get index
     retvalue = of_property_read_u32_array(np, "num", &index, 1);
     if(retvalue < 0)

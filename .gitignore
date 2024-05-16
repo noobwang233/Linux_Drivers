@@ -7,4 +7,6 @@
 **/.temp**
 **/**.mod
 **/*.o
-**/.cache/**
+**/.cache/*
+**/.cache/clangd/index/**.idx
+**/compile_commands.json
