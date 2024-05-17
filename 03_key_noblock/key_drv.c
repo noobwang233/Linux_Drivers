@@ -4,7 +4,7 @@
 #include <linux/init.h>    // 模块加载init和卸载exit相关头文件
 #include <linux/module.h>
 #include <linux/cdev.h>         // cdev相关头文件
-#include <linux/device.h>   //设备号dev_t相关头文件
+#include <linux/device.h>   //device相关头文件
 #include <linux/errno.h>    //错误相关头文件
 #include <linux/gpio.h>     //gpio子系统相关头文件
 #include <linux/of_gpio.h>  //of_gpio函数相关头文件

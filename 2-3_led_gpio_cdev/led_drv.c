@@ -35,7 +35,6 @@ struct led_dev_t
     struct cdev *led_cdev;              /* 字符设备结构体*/
     struct class *cls;
     struct device *dev;
-    wait_queue_head_t r_wait_list; //读等待队列
     wait_queue_head_t w_wait_list; //写等待队列
 };
 
@@ -306,7 +305,6 @@ static int led_dev_init(struct led_dev_t **led_devs, u32 index)
     // spin_lock_init(&led_devs[index]->lock);
     atomic_set(&led_devs[index]->status, LED_FREE);
     /*初始化等待队列*/
-    init_waitqueue_head(&led_devs[index]->r_wait_list);
     init_waitqueue_head(&led_devs[index]->w_wait_list);
     return 0;
 

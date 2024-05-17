@@ -5,7 +5,7 @@
 # 注意: 不同的开发板不同的编译器上述 3 个环境变量不一定相同,
 # 请参考各开发板的高级用户使用手册
 
-MODULE_NAME := led
+MODULE_NAME := key
 DTB_NAME := imx6ull-atk-mini-emmc
 DIRVER_NAME := $(MODULE_NAME)_drv
 APP_NAME := $(MODULE_NAME)_app
