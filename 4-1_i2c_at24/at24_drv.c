@@ -13,12 +13,12 @@
 #include "linux/printk.h"
 #include "at24_drv.h" 
 
+
+#define IOC_AT24C02_READ  100
+#define IOC_AT24C02_WRITE 101
+
 /* macro definition*/
-#define AT24_DEV_COUNT 1
-#define AT24C02_BYTE_LEN 2048/8 //2k bit 
-#define AT24C02_PAGE_SIZE AT24C02_BYTE_LEN/32 //32page
-#define AT24C02_FLAGS 0
-#define AT24C02_MAX_IO_COUNT 8 // max io byte every time
+#define AT24C02_MAX_IO_COUNT 128
 #define AT24C02_WRITE_TIMEOUT 25
 #define ERR_DBUG(fmt, ...)  	printk(KERN_ERR "%s, LINE %d :  " pr_fmt(fmt), __func__, __LINE__, ##__VA_ARGS__)
 #define loop_until_timeout(tout, op_time)				\
@@ -27,14 +27,12 @@
 	     usleep_range(1000, 1500), op_time = jiffies) // 休眠时间在 1000 到 1500 微秒之间的随机时长
 
 /* 变量声明 */
-
 /* private function declear */
 // probe and remove
 static int at24_drv_probe(struct i2c_client *client, const struct i2c_device_id *dt);
 static int at24_drv_remove(struct i2c_client *client);
 //file_operations
-static ssize_t at24_read(struct file *filp, char __user *buf, size_t cnt, loff_t *offt);
-static ssize_t at24_write(struct file *filp, const char __user *buf, size_t cnt, loff_t *offt);
+static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg);
 static int at24_release(struct inode *inode, struct file *filp);
 static int at24_open(struct inode *inode, struct file *filp);
 //module init and exit
@@ -43,24 +41,22 @@ static void __exit at24_drv_exit(void);
 // get and add at24_dev_t
 static int at24_add_dev(struct at24_dev_data_t *at24);
 static int at24_del_dev(struct at24_dev_data_t *at24);
-//static int at24_del_all_dev(void);
 static struct at24_dev_data_t* at24_get_dev(dev_t dev);
-// // 这个函数用于确保每次写入count个字节数量之后，不超过下一页的起始地址
-// static size_t at24_adjust_write_count(struct at24_dev_data_t *at24, unsigned int offset, size_t count);
 // 使用i2c_transfer 读取
 static ssize_t at24_read_i2c(struct at24_dev_data_t *at24, char *buf, unsigned int offset, size_t count);
 static ssize_t at24_write_i2c(struct at24_dev_data_t *at24, const char *buf,unsigned int offset, size_t count);
 /* private date definition */
 static struct at24_dev_data_t **at24_dev_list = NULL;
 static uint32_t at24_dev_count = 0;
+
 //必须有这个，不然装载驱动不成功
 static const struct i2c_device_id at24c02_ids[] = {
-	{ "at24cxx" },
+	{ "wt,at24c02",},
 	{ /* END OF LIST */ }
 };
 static const struct of_device_id at24_dev_match_table[] = 
 {
-    {.compatible = "at24c02"}, //.data 可以放具体设备是参数吗
+    {.compatible = "wt,at24c02",}, //.data 可以放具体设备是参数吗
     {}
 };
 // i2c_driver结构体
@@ -76,15 +72,21 @@ static struct i2c_driver at24_i2c_drv =
 	.id_table = at24c02_ids,
 };
 
+struct at24_buf{
+    int addr;
+    int len;
+    char *data;
+};
+
 static struct file_operations at24_fop = 
 {
 	.owner = THIS_MODULE,
-	.write = at24_write,
-	.read = at24_read,
 	.release = at24_release,
 	.open = at24_open,
+	.unlocked_ioctl = at24_ioctl,
 };
 
+// register at24 to at24_dev_list
 static int at24_add_dev(struct at24_dev_data_t *at24)
 {
 	struct at24_dev_data_t** at24_dev_list_temp;
@@ -154,17 +156,20 @@ static int at24_del_dev(struct at24_dev_data_t *at24)
 		return -ENOMEM;
 	}
 	//拷贝前i个
-	if((i + 1) > 1) //不是第一个
+	if(i  > 0) //不是第一个
 	{
 		memcpy(at24_dev_list_temp, at24_dev_list, sizeof(struct at24_dev_data_t *) * (i));
 	}
 	//拷贝i+2 到 at24_dev_count 个
-	if((i + 1) < at24_dev_count) //不是最后一个
+	if(i < at24_dev_count - 1) //不是最后一个
 	{
 		memcpy(&at24_dev_list_temp[i+1], &at24_dev_list[i+2], sizeof(struct at24_dev_data_t *) * (at24_dev_count - 1 - i));
 	}
+	//释放待删除的at24
 	kfree(at24);
+	//释放原先的at24_dev_list
 	kfree(at24_dev_list);
+	//赋值新的at24_dev_list
 	at24_dev_list = at24_dev_list_temp;
 	at24_dev_count = at24_dev_count-1;
 	if(at24_dev_count == 0)
@@ -198,6 +203,7 @@ static struct at24_dev_data_t* at24_get_dev(dev_t dev)
 	}
 	return at24_dev_list[i];
 }
+
 static ssize_t at24_read_i2c(struct at24_dev_data_t *at24, char *buf,
 				    unsigned int offset, size_t count)
 {
@@ -249,7 +255,6 @@ static ssize_t at24_write_i2c(struct at24_dev_data_t *at24, const char *buf,
 	ssize_t status = 0;
 
 	client = at24->client;
-	//count = at24_adjust_write_count(at24, offset, count);
 
 	ERR_DBUG("client->addr : %d!\n", client->addr);
 	msg.addr = client->addr;
@@ -295,65 +300,66 @@ static int at24_release(struct inode *inode, struct file *filp)
 {
 	return 0;
 }
-static ssize_t at24_write(struct file *filp, const char __user *buf, size_t cnt, loff_t *offt)
+
+static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int retvalue;
-	unsigned char buffer[8];
+	struct at24_buf *user_buf = (struct at24_buf *)arg;
+	struct at24_buf ker_buf;
 	struct at24_dev_data_t *at24 = (struct at24_dev_data_t *)filp->private_data;
 
-	//ERR_DBUG("at24_dev:%s Major:10 minor:%d\n", at24->client->name, at24->miscdev->minor);
-	    
-	retvalue = copy_from_user(buffer, buf, cnt);
+	retvalue = copy_from_user(&ker_buf, user_buf, (sizeof(struct at24_buf)));
 	if(retvalue < 0)
 	{
 		ERR_DBUG("copy_from_user failed!\n");
 	}
-	retvalue = at24_write_i2c(at24, buffer, 0, cnt);
-	if(retvalue < 0)
-	{
-		ERR_DBUG("at24_write_i2c failed!\n");
+
+	switch (cmd) {
+		case IOC_AT24C02_READ:
+		{
+			retvalue = at24_read_i2c(at24, ker_buf.data, ker_buf.addr, ker_buf.len);
+			if (retvalue != ker_buf.len) {
+				ERR_DBUG("read at24 address %d error, read count %d", ker_buf.addr, retvalue);
+			}
+			retvalue = copy_to_user(user_buf->data, ker_buf.data, ker_buf.len);
+			if(retvalue < 0)
+			{
+				ERR_DBUG("copy_to_user failed!\n");
+			}
+			break;
+		}
+		case IOC_AT24C02_WRITE:
+		{
+			retvalue = copy_from_user(ker_buf.data, user_buf->data, ker_buf.len);
+			if(retvalue < 0)
+			{
+				ERR_DBUG("copy_from_user failed!\n");
+			}
+			retvalue = at24_write_i2c(at24, ker_buf.data, ker_buf.addr, ker_buf.len);
+			if (retvalue != ker_buf.len) {
+				ERR_DBUG("write at24 address %d error, write count %d", ker_buf.addr, retvalue);
+			}
+			break;
+		}
+		default:
+			// assert
+			break;
 	}
 	return retvalue;
 }
-static ssize_t at24_read(struct file *filp, char __user *buf, size_t cnt, loff_t *offt)
-{
-	int retvalue;
-	unsigned char buffer[8];
-	struct at24_dev_data_t *at24 = (struct at24_dev_data_t *)filp->private_data;
 
-
-	retvalue = at24_read_i2c(at24, buffer, 0, cnt);
-	if(retvalue < 0)
-	{
-		ERR_DBUG("at24_read_i2c failed!\n");
-	}
-	retvalue = copy_to_user(buf, buffer, cnt);
-	if(retvalue < 0)
-	{
-		ERR_DBUG("copy_from_user failed!\n");
-	}
-	return retvalue;
-}
 
 /* function definition */
 static int at24_drv_probe(struct i2c_client *client, const struct i2c_device_id *dt)
 {
     int retvalue;
-    struct at24_platform_data chip;
     struct at24_dev_data_t *at24_dev_data;
-    unsigned num_addresses;
 
-    //get at24_platform_data, this data should be given in dts or ... In this test, i will fix the at24_platform_data by macro definition
-    chip.byte_len = AT24C02_BYTE_LEN;
-    chip.page_size = AT24C02_PAGE_SIZE;
-    chip.flags = AT24C02_FLAGS;
     // check the functionality if it supports i2c
     if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		ERR_DBUG("i2c adapter doesn't support i2c func!\n");
         return -EPFNOSUPPORT;
     }
-    // i2c地址个数
-    num_addresses = 1;
 
     //分配at24_dev_data_t空间,使用devm_kzalloc将分配的内存与设备结构体 struct device 绑定，当设备被注销时，会自动释放此空间
     at24_dev_data = devm_kzalloc(&client->dev, sizeof(struct at24_dev_data_t), GFP_KERNEL);
@@ -364,10 +370,10 @@ static int at24_drv_probe(struct i2c_client *client, const struct i2c_device_id 
 	}
     //初始化at24_dev_data中的变量
     mutex_init(&at24_dev_data->lock);
-    at24_dev_data->chip =chip;
-    at24_dev_data->num_addresses = num_addresses;
+
     //填充at24_dev_data中i2c_driver结构体
     at24_dev_data->i2cdriver = &at24_i2c_drv;
+
 	//使用miscdev注册设备
 	//申请一个miscdev空间
 	at24_dev_data->miscdev =devm_kzalloc(&client->dev, sizeof(struct miscdevice), GFP_KERNEL);
@@ -386,6 +392,7 @@ static int at24_drv_probe(struct i2c_client *client, const struct i2c_device_id 
 		retvalue = -EIO;
 		goto free_misc;
 	}
+
 	/* buffer (data + address at the beginning) */
 	at24_dev_data->writebuf = devm_kzalloc(&client->dev, AT24C02_MAX_IO_COUNT + 2, GFP_KERNEL);
 	if (!at24_dev_data->writebuf)
@@ -393,8 +400,10 @@ static int at24_drv_probe(struct i2c_client *client, const struct i2c_device_id 
 		ERR_DBUG("writebuf devm_kzalloc failed!\n");
 		return -ENOMEM;
 	}
+
 	at24_dev_data->dev = MKDEV(10, at24_dev_data->miscdev->minor);//记录设备号
 	printk("at24_dev: %s Major:10 minor:%d\n", at24_dev_data->miscdev->name, at24_dev_data->miscdev->minor);
+
 	retvalue = at24_add_dev(at24_dev_data);
 	if(retvalue != 0)
 	{
