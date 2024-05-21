@@ -5,8 +5,8 @@
 # 注意: 不同的开发板不同的编译器上述 3 个环境变量不一定相同,
 # 请参考各开发板的高级用户使用手册
 
-MODULE_NAME := at24
-DTB_NAME := imx6ull-alientek-emmc
+MODULE_NAME := oled
+DTB_NAME := imx6ull-atk-mini-emmc
 DIRVER_NAME := $(MODULE_NAME)_drv
 APP_NAME := $(MODULE_NAME)_app
 KERNELDIR := $(shell pwd)/../../kernel/linux-imx_4.1.15
@@ -21,6 +21,7 @@ kernel_modules:
 	export ARCH=arm
 	export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) M=$(CURRENT_PATH) modules
+	$(MAKE) -C $(KERNELDIR) $(DTB_NAME).dtb
 	cp $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb $(OUTPUT_DIR)/ -f
 	cp $(DIRVER_NAME).ko $(OUTPUT_DIR)/
 app:

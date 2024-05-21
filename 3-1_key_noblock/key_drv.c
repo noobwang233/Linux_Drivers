@@ -19,7 +19,7 @@
 #include <linux/timer.h>
 
 #define KEY_MAJOR 234
-#define DEV_COUNT 2
+#define DEV_COUNT 1
 #define KEY_PUSH 1
 #define KEY_RELEASED 0
 /*private date*/
@@ -45,7 +45,7 @@ struct key_dev_t
 };
 // match table
 const struct of_device_id keys_of_match_table[] = {
-    {.compatible = "key_gpio",},
+    {.compatible = "my_key",},
     {},
 };
 struct key_dev_t *key_devs[DEV_COUNT] = {0};
