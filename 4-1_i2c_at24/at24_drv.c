@@ -18,8 +18,9 @@
 #define IOC_AT24C02_WRITE 101
 
 /* macro definition*/
-#define AT24C02_MAX_IO_COUNT 128
-#define AT24C02_WRITE_TIMEOUT 25
+#define AT24C02_SIZE 			256
+#define AT24C02_PAGE_SIZE    	16
+#define AT24C02_WRITE_TIMEOUT 	25
 #define ERR_DBUG(fmt, ...)  	printk(KERN_ERR "%s, LINE %d :  " pr_fmt(fmt), __func__, __LINE__, ##__VA_ARGS__)
 #define loop_until_timeout(tout, op_time)				\
 	for (tout = jiffies + msecs_to_jiffies(AT24C02_WRITE_TIMEOUT), op_time = 0; \
@@ -217,8 +218,8 @@ static ssize_t at24_read_i2c(struct at24_dev_data_t *at24, char *buf,
 	memset(msg, 0, sizeof(msg));
 	client = at24->client;
 
-	if (count > AT24C02_MAX_IO_COUNT)
-		count = AT24C02_MAX_IO_COUNT;
+	if (count > AT24C02_PAGE_SIZE)
+		count = AT24C02_PAGE_SIZE;
 
 	msgbuf[0] = offset;
 
@@ -304,6 +305,12 @@ static int at24_release(struct inode *inode, struct file *filp)
 static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int retvalue;
+	// uint8_t unalign_len_f;
+	// uint8_t unalign_len_b;
+	// uint8_t align_pages;
+	// int addr;
+	// char *data;
+	// uint8_t i;
 	struct at24_buf *user_buf = (struct at24_buf *)arg;
 	struct at24_buf ker_buf;
 	struct at24_dev_data_t *at24 = (struct at24_dev_data_t *)filp->private_data;
@@ -317,6 +324,7 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 		case IOC_AT24C02_READ:
 		{
+			// ker_buf.data = kzalloc(ker_buf.len, GFP_KERNEL);
 			retvalue = at24_read_i2c(at24, ker_buf.data, ker_buf.addr, ker_buf.len);
 			if (retvalue != ker_buf.len) {
 				ERR_DBUG("read at24 address %d error, read count %d", ker_buf.addr, retvalue);
@@ -326,10 +334,14 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			{
 				ERR_DBUG("copy_to_user failed!\n");
 			}
+			// kfree(ker_buf.data);
 			break;
 		}
 		case IOC_AT24C02_WRITE:
 		{
+			// if(ker_buf.len > AT24C02_SIZE)
+			// 	ker_buf.len = AT24C02_SIZE;
+
 			retvalue = copy_from_user(ker_buf.data, user_buf->data, ker_buf.len);
 			if(retvalue < 0)
 			{
@@ -337,7 +349,54 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			}
 			retvalue = at24_write_i2c(at24, ker_buf.data, ker_buf.addr, ker_buf.len);
 			if (retvalue != ker_buf.len) {
-				ERR_DBUG("write at24 address %d error, write count %d", ker_buf.addr, retvalue);
+
+			// if (ker_buf.addr % AT24C02_PAGE_SIZE !=0)
+			// {
+			// 	unalign_len_f = AT24C02_PAGE_SIZE - (ker_buf.addr % AT24C02_PAGE_SIZE);
+			// 	if(unalign_len_f > ker_buf.len)
+			// 	{
+			// 		unalign_len_f = ker_buf.len;
+			// 	}
+			// }
+			// else 
+			// {
+			// 	unalign_len_f = 0;
+			// }
+			// align_pages = (ker_buf.len - unalign_len_f) / AT24C02_PAGE_SIZE;
+			// unalign_len_b = (ker_buf.len - unalign_len_f) % AT24C02_PAGE_SIZE;
+
+			// addr = 	ker_buf.addr;
+			// data = ker_buf.data;
+			// if (unalign_len_f != 0){
+			// 	retvalue = at24_write_i2c(at24, data, addr, unalign_len_f);
+			// 	if (retvalue != unalign_len_f) {
+			// 		ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
+			// 	}
+			// 	addr = addr + unalign_len_f;
+			// 	data = data + unalign_len_f;
+			// }
+
+			// if (align_pages != 0)
+			// {
+			// 	for(i = 0; i < align_pages; i++)
+			// 	{
+			// 		retvalue = at24_write_i2c(at24, data, addr, AT24C02_PAGE_SIZE);
+			// 		if (retvalue != AT24C02_PAGE_SIZE) {
+			// 			ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
+			// 		}
+			// 		addr = addr + AT24C02_PAGE_SIZE;
+			// 		data = data + AT24C02_PAGE_SIZE;
+			// 	}
+			// }
+
+			// if (unalign_len_b != 0){
+			// 	retvalue = at24_write_i2c(at24, data, addr, unalign_len_b);
+			// 	if (retvalue != unalign_len_b) {
+			// 		ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
+			// 	}
+			// 	addr = addr + unalign_len_b;
+			// 	data = data + unalign_len_b;
+			// }
 			}
 			break;
 		}
@@ -394,7 +453,7 @@ static int at24_drv_probe(struct i2c_client *client, const struct i2c_device_id 
 	}
 
 	/* buffer (data + address at the beginning) */
-	at24_dev_data->writebuf = devm_kzalloc(&client->dev, AT24C02_MAX_IO_COUNT + 2, GFP_KERNEL);
+	at24_dev_data->writebuf = devm_kzalloc(&client->dev, AT24C02_PAGE_SIZE + 2, GFP_KERNEL);
 	if (!at24_dev_data->writebuf)
 	{
 		ERR_DBUG("writebuf devm_kzalloc failed!\n");

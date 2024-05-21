@@ -50,7 +50,7 @@ int main(int argc, char *argv[])
         {
             return retvalue;
         }
-        printf("wirte %s to adress %s sucessfully\n", argv[2], argv[3]);
+        printf("wirte %s to adress %s sucessfully\n", argv[4], argv[3]);
     }
     else if(!strcmp((const char *)("r"), (const char *)(argv[2])))
     {
