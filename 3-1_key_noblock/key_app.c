@@ -41,7 +41,7 @@ int main(int argc, char *argv[])
             printf("read file %s failed!\r\n", filename);
             return -1;
         }
-        printf("key %d status: %s \r\n", num,(readbuf[0] == 1 ? "pushed":"released"));
+        printf("key %d status: %s \r\n", num,(readbuf[0] == 0 ? "pushed":"released"));
         // sprintf(ledfilename, "/dev/led_dev_%d", num);
         // led_fd = open(ledfilename, O_RDWR | O_NONBLOCK);
         // if(led_fd < 0)
