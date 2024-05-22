@@ -10,6 +10,7 @@
 #include <linux/i2c.h>      //i2c子系统相关头文件
 #include <linux/miscdevice.h> //使用miscdev
 #include <linux/delay.h>      //usleep_range 头文件
+#include "linux/err.h"
 #include "linux/printk.h"
 #include "at24_drv.h" 
 
@@ -39,16 +40,14 @@ static int at24_open(struct inode *inode, struct file *filp);
 //module init and exit
 static int __init at24_drv_init(void);
 static void __exit at24_drv_exit(void);
-// get and add at24_dev_t
-static int at24_add_dev(struct at24_dev_data_t *at24);
-static int at24_del_dev(struct at24_dev_data_t *at24);
-static struct at24_dev_data_t* at24_get_dev(dev_t dev);
 // 使用i2c_transfer 读取
 static ssize_t at24_read_i2c(struct at24_dev_data_t *at24, char *buf, unsigned int offset, size_t count);
 static ssize_t at24_write_i2c(struct at24_dev_data_t *at24, const char *buf,unsigned int offset, size_t count);
 /* private date definition */
-static struct at24_dev_data_t **at24_dev_list = NULL;
-static uint32_t at24_dev_count = 0;
+static struct at24_dev_data_t at24_dev = {
+	.name = "at24c02",
+};
+static struct class *at24_cls;//设备类
 
 //必须有这个，不然装载驱动不成功
 static const struct i2c_device_id at24c02_ids[] = {
@@ -86,124 +85,6 @@ static struct file_operations at24_fop =
 	.open = at24_open,
 	.unlocked_ioctl = at24_ioctl,
 };
-
-// register at24 to at24_dev_list
-static int at24_add_dev(struct at24_dev_data_t *at24)
-{
-	struct at24_dev_data_t** at24_dev_list_temp;
-
-	if(at24_dev_list !=NULL)
-	{
-		//创建at24_dev_count + 1个struct at24_dev_data_t *空间
-		at24_dev_list_temp = kzalloc(sizeof(struct at24_dev_data_t *) * (at24_dev_count + 1), GFP_KERNEL);
-		if(at24_dev_list_temp == NULL)
-		{
-			ERR_DBUG("at24_add_dev: kzalloc failed!\n");
-			return -ENOMEM;
-		}
-		memcpy(at24_dev_list_temp, at24_dev_list, sizeof(struct at24_dev_data_t *) * (at24_dev_count));
-		kfree(at24_dev_list);
-		at24_dev_list_temp[at24_dev_count] = at24;//add at24 to the end of list
-		at24_dev_list = at24_dev_list_temp;
-		at24_dev_count = at24_dev_count + 1;
-	}
-	else 
-	{
-		at24_dev_list = kzalloc(sizeof(struct at24_dev_data_t *), GFP_KERNEL);
-		if(at24_dev_list == NULL)
-		{
-			ERR_DBUG("at24_add_dev: kzalloc failed!\n");
-			return -ENOMEM;
-		}
-		at24_dev_list[0] = at24;//add at24 to the end of list
-		at24_dev_count = at24_dev_count + 1;
-	}
-	return 0;
-}
-
-static int at24_del_dev(struct at24_dev_data_t *at24)
-{
-	int i;
-	struct at24_dev_data_t** at24_dev_list_temp;
-
-	if(at24_dev_count == 0)
-	{
-		ERR_DBUG("the at24_dev_list is NULL!\n");
-		return -EIO;
-	}
-
-	if(at24 == NULL)
-	{
-		ERR_DBUG("the at24_dev is NULL!\n");
-		return -EIO;
-	}
-
-	//find the positon of this at24 in at24_dev_list 第i+1个
-	for(i = 0; i < at24_dev_count; i++)
-	{
-		if(at24_dev_list[i] == at24)
-			break;
-	}
-	if(i >= at24_dev_count)
-	{
-		ERR_DBUG("can not find at24_dev\n");
-		return -EIO;
-	}
-	//创建at24_dev_count - 1 个struct at24_dev_data_t *空间
-	at24_dev_list_temp = kzalloc(sizeof(struct at24_dev_data_t *) * (at24_dev_count - 1), GFP_KERNEL);
-	if(at24_dev_list_temp == NULL)
-	{
-		ERR_DBUG("at24_add_dev: kzalloc failed!\n");
-		return -ENOMEM;
-	}
-	//拷贝前i个
-	if(i  > 0) //不是第一个
-	{
-		memcpy(at24_dev_list_temp, at24_dev_list, sizeof(struct at24_dev_data_t *) * (i));
-	}
-	//拷贝i+2 到 at24_dev_count 个
-	if(i < at24_dev_count - 1) //不是最后一个
-	{
-		memcpy(&at24_dev_list_temp[i+1], &at24_dev_list[i+2], sizeof(struct at24_dev_data_t *) * (at24_dev_count - 1 - i));
-	}
-	//释放待删除的at24
-	kfree(at24);
-	//释放原先的at24_dev_list
-	kfree(at24_dev_list);
-	//赋值新的at24_dev_list
-	at24_dev_list = at24_dev_list_temp;
-	at24_dev_count = at24_dev_count-1;
-	if(at24_dev_count == 0)
-	{
-		kfree(at24_dev_list);
-		at24_dev_list = NULL;
-	}
-	return 0;
-
-}
-
-static struct at24_dev_data_t* at24_get_dev(dev_t dev)
-{
-	int i;
-
-	if(at24_dev_count == 0)
-	{
-		ERR_DBUG("the at24_dev_list is NULL!\n");
-		return NULL;
-	}
-	//find the positon of this at24 in at24_dev_list 第i+1个
-	for(i = 0; i < at24_dev_count; i++)
-	{
-		if(at24_dev_list[i]->dev == dev)
-			break;
-	}
-	if(i >= at24_dev_count)
-	{
-		ERR_DBUG("can not find at24_dev\n");
-		return NULL;
-	}
-	return at24_dev_list[i];
-}
 
 static ssize_t at24_read_i2c(struct at24_dev_data_t *at24, char *buf,
 				    unsigned int offset, size_t count)
@@ -284,33 +165,27 @@ static ssize_t at24_write_i2c(struct at24_dev_data_t *at24, const char *buf,
 
 static int at24_open(struct inode *inode, struct file *filp)
 {
-	struct at24_dev_data_t *at24 = at24_get_dev(inode->i_rdev);
-
-	if(at24 == NULL)
-	{
-		ERR_DBUG("at24_get_dev failed!\n");
-		return -ENOMEM;
-	}
-	printk("open at24_dev:%s Major:10 minor:%d\n", at24->client->name, at24->miscdev->minor);
-	filp->private_data = at24;
+	printk("open at24_dev:%s major=%d,minor=%d\r\n", at24_dev.client->name, MAJOR(at24_dev.dt), MINOR(at24_dev.dt));
+	filp->private_data = &at24_dev;
 
 	return 0;
 
 }
 static int at24_release(struct inode *inode, struct file *filp)
 {
+	printk("close at24_dev:%s major=%d,minor=%d\r\n", at24_dev.client->name, MAJOR(at24_dev.dt), MINOR(at24_dev.dt));
 	return 0;
 }
 
 static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	int retvalue;
-	// uint8_t unalign_len_f;
-	// uint8_t unalign_len_b;
-	// uint8_t align_pages;
-	// int addr;
-	// char *data;
-	// uint8_t i;
+	uint8_t unalign_len_f;
+	uint8_t unalign_len_b;
+	uint8_t align_pages;
+	int addr;
+	char *data;
+	uint8_t i;
 	struct at24_buf *user_buf = (struct at24_buf *)arg;
 	struct at24_buf ker_buf;
 	struct at24_dev_data_t *at24 = (struct at24_dev_data_t *)filp->private_data;
@@ -324,7 +199,7 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 		case IOC_AT24C02_READ:
 		{
-			// ker_buf.data = kzalloc(ker_buf.len, GFP_KERNEL);
+			ker_buf.data = kzalloc(ker_buf.len, GFP_KERNEL);
 			retvalue = at24_read_i2c(at24, ker_buf.data, ker_buf.addr, ker_buf.len);
 			if (retvalue != ker_buf.len) {
 				ERR_DBUG("read at24 address %d error, read count %d", ker_buf.addr, retvalue);
@@ -334,69 +209,65 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			{
 				ERR_DBUG("copy_to_user failed!\n");
 			}
-			// kfree(ker_buf.data);
+			kfree(ker_buf.data);
 			break;
 		}
 		case IOC_AT24C02_WRITE:
 		{
-			// if(ker_buf.len > AT24C02_SIZE)
-			// 	ker_buf.len = AT24C02_SIZE;
-
+			if(ker_buf.len > AT24C02_SIZE)
+				ker_buf.len = AT24C02_SIZE;
 			retvalue = copy_from_user(ker_buf.data, user_buf->data, ker_buf.len);
 			if(retvalue < 0)
 			{
 				ERR_DBUG("copy_from_user failed!\n");
 			}
-			retvalue = at24_write_i2c(at24, ker_buf.data, ker_buf.addr, ker_buf.len);
-			if (retvalue != ker_buf.len) {
 
-			// if (ker_buf.addr % AT24C02_PAGE_SIZE !=0)
-			// {
-			// 	unalign_len_f = AT24C02_PAGE_SIZE - (ker_buf.addr % AT24C02_PAGE_SIZE);
-			// 	if(unalign_len_f > ker_buf.len)
-			// 	{
-			// 		unalign_len_f = ker_buf.len;
-			// 	}
-			// }
-			// else 
-			// {
-			// 	unalign_len_f = 0;
-			// }
-			// align_pages = (ker_buf.len - unalign_len_f) / AT24C02_PAGE_SIZE;
-			// unalign_len_b = (ker_buf.len - unalign_len_f) % AT24C02_PAGE_SIZE;
+			if (ker_buf.addr % AT24C02_PAGE_SIZE !=0)
+			{
+				unalign_len_f = AT24C02_PAGE_SIZE - (ker_buf.addr % AT24C02_PAGE_SIZE);
+				if(unalign_len_f > ker_buf.len)
+				{
+					unalign_len_f = ker_buf.len;
+				}
+			}
+			else 
+			{
+				unalign_len_f = 0;
+			}
+			align_pages = (ker_buf.len - unalign_len_f) / AT24C02_PAGE_SIZE;
+			unalign_len_b = (ker_buf.len - unalign_len_f) % AT24C02_PAGE_SIZE;
 
-			// addr = 	ker_buf.addr;
-			// data = ker_buf.data;
-			// if (unalign_len_f != 0){
-			// 	retvalue = at24_write_i2c(at24, data, addr, unalign_len_f);
-			// 	if (retvalue != unalign_len_f) {
-			// 		ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
-			// 	}
-			// 	addr = addr + unalign_len_f;
-			// 	data = data + unalign_len_f;
-			// }
+			addr = 	ker_buf.addr;
+			data = ker_buf.data;
+			if (unalign_len_f != 0){
+				retvalue = at24_write_i2c(at24, data, addr, unalign_len_f);
+				if (retvalue != unalign_len_f) {
+					ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
+				}
+				addr = addr + unalign_len_f;
+				data = data + unalign_len_f;
+			}
 
-			// if (align_pages != 0)
-			// {
-			// 	for(i = 0; i < align_pages; i++)
-			// 	{
-			// 		retvalue = at24_write_i2c(at24, data, addr, AT24C02_PAGE_SIZE);
-			// 		if (retvalue != AT24C02_PAGE_SIZE) {
-			// 			ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
-			// 		}
-			// 		addr = addr + AT24C02_PAGE_SIZE;
-			// 		data = data + AT24C02_PAGE_SIZE;
-			// 	}
-			// }
+			if (align_pages != 0)
+			{
+				for(i = 0; i < align_pages; i++)
+				{
+					retvalue = at24_write_i2c(at24, data, addr, AT24C02_PAGE_SIZE);
+					if (retvalue != AT24C02_PAGE_SIZE) {
+						ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
+					}
+					addr = addr + AT24C02_PAGE_SIZE;
+					data = data + AT24C02_PAGE_SIZE;
+				}
+			}
 
-			// if (unalign_len_b != 0){
-			// 	retvalue = at24_write_i2c(at24, data, addr, unalign_len_b);
-			// 	if (retvalue != unalign_len_b) {
-			// 		ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
-			// 	}
-			// 	addr = addr + unalign_len_b;
-			// 	data = data + unalign_len_b;
-			// }
+			if (unalign_len_b != 0){
+				retvalue = at24_write_i2c(at24, data, addr, unalign_len_b);
+				if (retvalue != unalign_len_b) {
+					ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
+				}
+				addr = addr + unalign_len_b;
+				data = data + unalign_len_b;
 			}
 			break;
 		}
@@ -412,113 +283,117 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 static int at24_drv_probe(struct i2c_client *client, const struct i2c_device_id *dt)
 {
     int retvalue;
-    struct at24_dev_data_t *at24_dev_data;
 
     // check the functionality if it supports i2c
     if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		ERR_DBUG("i2c adapter doesn't support i2c func!\n");
         return -EPFNOSUPPORT;
     }
-
-    //分配at24_dev_data_t空间,使用devm_kzalloc将分配的内存与设备结构体 struct device 绑定，当设备被注销时，会自动释放此空间
-    at24_dev_data = devm_kzalloc(&client->dev, sizeof(struct at24_dev_data_t), GFP_KERNEL);
-    if(!at24_dev_data)
-	{
-		ERR_DBUG("devm_kzalloc failed!\n");
+	
+    /* 使用cdev注册字符设备 */
+    at24_dev.at24_cdev = cdev_alloc();//申请cdev字符设备的空间
+    if(at24_dev.at24_cdev == NULL)
+    {
+        pr_err("at24_cdev cdev_alloc failed! \n");
         return -ENOMEM;
-	}
-    //初始化at24_dev_data中的变量
-    mutex_init(&at24_dev_data->lock);
+    }
+    printk("at24_cdev cdev_alloc successfully!\n");
 
-    //填充at24_dev_data中i2c_driver结构体
-    at24_dev_data->i2cdriver = &at24_i2c_drv;
+    /*生成设备号*/
+    #ifdef AT24_MAJOR
+        at24_dev.dt = MKDEV(AT24_MAJOR, 0);
+        retvalue = register_chrdev_region(at24_dev.dt, 1, at24_dev.name);
+        if(retvalue != 0)
+        {
+            pr_err("at24_dev dev_t register failed! start alloc register!\n");
+            retvalue = alloc_chrdev_region(&(at24_dev.dt), 0, 1, at24_dev.name);
+            if(retvalue != 0)
+            {
+                pr_err("at24_dev dev_t register failed! \n");
+                goto freecdev;
+            }
+        }
+    #else
+        retvalue = alloc_chrdev_region(&(at24_dev.dt), 0, 1, at24_dev.name);
+        if(retvalue != 0)
+        {
+            pr_err("at24_dev dev_t register failed! \n");
+            goto freecdev;
+        }
+    #endif
+    printk("at24 register dev_t success! major=%d,minor=%d\r\n", MAJOR(at24_dev.dt), MINOR(at24_dev.dt));
+    /*注册字符设备*/
+    at24_dev.at24_cdev->owner = THIS_MODULE;
+    cdev_init(at24_dev.at24_cdev, &at24_fop);
+    printk("cdev_init success!\n");
+    retvalue = cdev_add(at24_dev.at24_cdev, at24_dev.dt, 1);
+    if(retvalue != 0) 
+    {
+        pr_err("cannot register cdev driver\n");
+        goto freedevt;
+    }
+    printk("cdev_add success!\n");
+    /*生成设备节点*/
+    at24_dev.dev = device_create(at24_cls, NULL,  at24_dev.dt,  NULL,  "at24_dev");
+    if(at24_dev.dev == NULL)
+    {
+        pr_err("device_create failed!\n");
+        goto freedevt;
+    }
+    printk("at24_dev create success!\r\n");
 
-	//使用miscdev注册设备
-	//申请一个miscdev空间
-	at24_dev_data->miscdev =devm_kzalloc(&client->dev, sizeof(struct miscdevice), GFP_KERNEL);
-	if(!at24_dev_data)
-	{
-		ERR_DBUG("devm_kzalloc failed!\n");
-		retvalue = -ENOMEM;
-        goto free_at24_dev;
-	}
-	at24_dev_data->miscdev->fops = &at24_fop;
-	at24_dev_data->miscdev->name = client->dev.of_node->name;
-	retvalue = misc_register(at24_dev_data->miscdev);
-	if(retvalue != 0)
-	{
-		ERR_DBUG("misc_register failed!\n");
-		retvalue = -EIO;
-		goto free_misc;
-	}
-
-	/* buffer (data + address at the beginning) */
-	at24_dev_data->writebuf = devm_kzalloc(&client->dev, AT24C02_PAGE_SIZE + 2, GFP_KERNEL);
-	if (!at24_dev_data->writebuf)
-	{
-		ERR_DBUG("writebuf devm_kzalloc failed!\n");
-		return -ENOMEM;
-	}
-
-	at24_dev_data->dev = MKDEV(10, at24_dev_data->miscdev->minor);//记录设备号
-	printk("at24_dev: %s Major:10 minor:%d\n", at24_dev_data->miscdev->name, at24_dev_data->miscdev->minor);
-
-	retvalue = at24_add_dev(at24_dev_data);
-	if(retvalue != 0)
-	{
-		ERR_DBUG("at24_add_dev failed!\n");
-		retvalue = -EIO;
-		goto free_misc;
-	}
-	at24_dev_data->client = client;
-	memcpy(client->name, (const char *)client->dev.of_node->name, strlen(client->dev.of_node->name));
-    i2c_set_clientdata(client, at24_dev_data);//将设备结构体指针放入client->dev->dev_data中
+	at24_dev.client = client;
+	memcpy(client->name, (const char *)at24_dev.name, strlen(at24_dev.name));
 	printk("at24_drv_probe successfully!\n");
     return 0;
-free_misc:
-	if(at24_dev_data->miscdev != NULL)
-		kfree(at24_dev_data->miscdev);
-free_at24_dev:
-	if(at24_dev_data != NULL)
-		kfree(at24_dev_data);
-	return retvalue;
 
+freedevt:
+	unregister_chrdev_region(at24_dev.dt, 1); /* 注销设备号 */
+	ERR_DBUG("free_misc successfully\n");
+freecdev:
+	if(at24_dev.at24_cdev != NULL)
+		cdev_del(at24_dev.at24_cdev);
+	ERR_DBUG("free cdev successfully\n");
+	return retvalue;
 }
 
 static int at24_drv_remove(struct i2c_client *client)
 {
-	int retvalue = 0;
-	struct at24_dev_data_t *at24_dev_data = (struct at24_dev_data_t *)i2c_get_clientdata(client);
-
-	if(at24_dev_data != NULL)
-	{
-		misc_deregister(at24_dev_data->miscdev);
-		retvalue = at24_del_dev(at24_dev_data);
-		if(retvalue != 0)
-		{
-			ERR_DBUG("at24 del dev error!\n");
-		}
-		else 
-		{
-			printk("at24_drv_remove successfully!\n");
-		}
-	}
-
-    return retvalue;
+	device_destroy(at24_cls, at24_dev.dt);
+	printk("device_destroy success!\n");
+	cdev_del(at24_dev.at24_cdev);
+	printk("cdev_del success!\n");
+	unregister_chrdev_region(at24_dev.dt, 1);
+	printk("unregister_chrdev_region success!\n");
+	return 0;
 }
 
 static int __init at24_drv_init(void)
 {
+	int retvalue;
+    at24_cls = class_create(THIS_MODULE, "led_drv");
+    if(at24_cls == NULL)
+    {
+        pr_err("create at24 class failed! \n");
+        return -EIO;
+    }
+    printk("class_create success!\n");
     //注册i2c_driver
-	ERR_DBUG("successfully\n");
-    return i2c_add_driver(&at24_i2c_drv);
+	retvalue = i2c_add_driver(&at24_i2c_drv);
+	if(!retvalue)
+		ERR_DBUG("successfully\n");
+	else
+	 	ERR_DBUG("failed\n");
+    return retvalue;
 }
 
 static void __exit at24_drv_exit(void)
 {
     //注销i2c_driver
-	ERR_DBUG("successfully\n");
     i2c_del_driver(&at24_i2c_drv);
+	ERR_DBUG("successfully\n");
+    class_destroy(at24_cls);
+    printk("class_destroy success!\n");
 }
 
 module_init(at24_drv_init);
