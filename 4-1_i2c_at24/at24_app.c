@@ -49,9 +49,10 @@ int main(int argc, char *argv[])
         retvalue = ioctl(fd, IOC_AT24C02_WRITE, &buffer);
         if(retvalue < 0)
         {
+            printf("wirte %s to adress %s failed, wirttern %d bytes\n", argv[4], argv[3], retvalue);
             return retvalue;
         }
-        printf("wirte %s to adress %s sucessfully\n", argv[2], argv[3]);
+        printf("wirte %s to adress %s sucessfully\n", argv[4], argv[3]);
         free(buffer.data);
     }
     else if(!strcmp((const char *)("r"), (const char *)(argv[2])))
@@ -62,6 +63,7 @@ int main(int argc, char *argv[])
         retvalue = ioctl(fd, IOC_AT24C02_READ, &buffer);
         if(retvalue < 0)
         {
+            printf("read adress %s failed, wirttern %d bytes\n",  argv[3], retvalue);
             return retvalue;
         }
         printf("address %s: %s \r\n", argv[3], buffer.data);

@@ -147,7 +147,8 @@ static ssize_t at24_write_i2c(struct at24_dev_data_t *at24, const char *buf,
 	msg.buf[0] = offset;
 	memcpy(&msg.buf[1], buf, count);
 	msg.len = 1 + count;
-
+	ERR_DBUG("&msg.buf[1]= %s, len = %d\r\n", &msg.buf[1], msg.len);
+	ERR_DBUG("msg.buf= %s, len = %d\r\n", msg.buf, msg.len);
 	loop_until_timeout(timeout, write_time) {
 		status = i2c_transfer(client->adapter, &msg, 1);
 		if (status == 1)
@@ -183,6 +184,7 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	uint8_t unalign_len_f;
 	uint8_t unalign_len_b;
 	uint8_t align_pages;
+	uint8_t counts = 0;
 	int addr;
 	char *data;
 	uint8_t i;
@@ -194,6 +196,7 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	if(retvalue < 0)
 	{
 		ERR_DBUG("copy_from_user failed!\n");
+		return retvalue;
 	}
 
 	switch (cmd) {
@@ -208,6 +211,7 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			if(retvalue < 0)
 			{
 				ERR_DBUG("copy_to_user failed!\n");
+				return retvalue;
 			}
 			kfree(ker_buf.data);
 			break;
@@ -220,6 +224,7 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			if(retvalue < 0)
 			{
 				ERR_DBUG("copy_from_user failed!\n");
+				return retvalue;
 			}
 
 			if (ker_buf.addr % AT24C02_PAGE_SIZE !=0)
@@ -239,35 +244,52 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 			addr = 	ker_buf.addr;
 			data = ker_buf.data;
+
 			if (unalign_len_f != 0){
+				ERR_DBUG("data = %s \r\n", data);
 				retvalue = at24_write_i2c(at24, data, addr, unalign_len_f);
 				if (retvalue != unalign_len_f) {
-					ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
+					ERR_DBUG("write at24 address %d error, read count %d", addr, retvalue);
+					return retvalue;
 				}
-				addr = addr + unalign_len_f;
-				data = data + unalign_len_f;
+				counts +=  unalign_len_f;
+				if (counts < ker_buf.len) {
+					addr = addr + unalign_len_f;
+					data = data + unalign_len_f;	
+				}
 			}
 
 			if (align_pages != 0)
 			{
 				for(i = 0; i < align_pages; i++)
 				{
+					ERR_DBUG("data = %s \r\n", data);
 					retvalue = at24_write_i2c(at24, data, addr, AT24C02_PAGE_SIZE);
 					if (retvalue != AT24C02_PAGE_SIZE) {
-						ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
+						ERR_DBUG("write at24 address %d error, read count %d", addr, retvalue);
+						return retvalue;
 					}
-					addr = addr + AT24C02_PAGE_SIZE;
-					data = data + AT24C02_PAGE_SIZE;
+					counts +=  AT24C02_PAGE_SIZE;
+					if (counts < ker_buf.len) {
+						addr = addr + AT24C02_PAGE_SIZE;
+						data = data + AT24C02_PAGE_SIZE;	
+					}
+					ERR_DBUG("data = %s \r\n", data);
 				}
 			}
 
 			if (unalign_len_b != 0){
+				ERR_DBUG("data = %s \r\n", data);
 				retvalue = at24_write_i2c(at24, data, addr, unalign_len_b);
 				if (retvalue != unalign_len_b) {
-					ERR_DBUG("read at24 address %d error, read count %d", addr, retvalue);
+					ERR_DBUG("write at24 address %d error, read count %d", addr, retvalue);
+					return retvalue;
 				}
-				addr = addr + unalign_len_b;
-				data = data + unalign_len_b;
+				counts +=  unalign_len_b;
+				if (counts < ker_buf.len) {
+					addr = addr + unalign_len_b;
+					data = data + unalign_len_b;	
+				}
 			}
 			break;
 		}
@@ -275,7 +297,7 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			// assert
 			break;
 	}
-	return retvalue;
+	return 0;
 }
 
 
@@ -290,12 +312,20 @@ static int at24_drv_probe(struct i2c_client *client, const struct i2c_device_id 
         return -EPFNOSUPPORT;
     }
 	
+	at24_dev.writebuf = kzalloc(sizeof(char) * (AT24C02_PAGE_SIZE + 1), GFP_KERNEL);
+	if(IS_ERR_OR_NULL(at24_dev.writebuf))
+	{
+		ERR_DBUG("kzalloc error!\n");
+		return -ENOMEM;
+	}
+
     /* 使用cdev注册字符设备 */
     at24_dev.at24_cdev = cdev_alloc();//申请cdev字符设备的空间
     if(at24_dev.at24_cdev == NULL)
     {
         pr_err("at24_cdev cdev_alloc failed! \n");
-        return -ENOMEM;
+        retvalue = -ENOMEM;
+		goto freebuffer;
     }
     printk("at24_cdev cdev_alloc successfully!\n");
 
@@ -338,6 +368,7 @@ static int at24_drv_probe(struct i2c_client *client, const struct i2c_device_id 
     if(at24_dev.dev == NULL)
     {
         pr_err("device_create failed!\n");
+		retvalue = -ENOMEM;
         goto freedevt;
     }
     printk("at24_dev create success!\r\n");
@@ -354,6 +385,10 @@ freecdev:
 	if(at24_dev.at24_cdev != NULL)
 		cdev_del(at24_dev.at24_cdev);
 	ERR_DBUG("free cdev successfully\n");
+freebuffer:
+	if(at24_dev.writebuf != NULL)
+		kfree(at24_dev.writebuf);
+	ERR_DBUG("freebuffer successfully\n");
 	return retvalue;
 }
 
@@ -361,10 +396,15 @@ static int at24_drv_remove(struct i2c_client *client)
 {
 	device_destroy(at24_cls, at24_dev.dt);
 	printk("device_destroy success!\n");
-	cdev_del(at24_dev.at24_cdev);
-	printk("cdev_del success!\n");
+	if(at24_dev.at24_cdev != NULL)
+	{
+		cdev_del(at24_dev.at24_cdev);
+		printk("cdev_del success!\n");
+	}
 	unregister_chrdev_region(at24_dev.dt, 1);
 	printk("unregister_chrdev_region success!\n");
+	if(at24_dev.writebuf != NULL)
+		kfree(at24_dev.writebuf);
 	return 0;
 }
 
