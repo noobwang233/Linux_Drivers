@@ -99,9 +99,6 @@ static ssize_t at24_read_i2c(struct at24_dev_data_t *at24, char *buf,
 	memset(msg, 0, sizeof(msg));
 	client = at24->client;
 
-	if (count > AT24C02_PAGE_SIZE)
-		count = AT24C02_PAGE_SIZE;
-
 	msgbuf[0] = offset;
 
 	msg[0].addr = client->addr;
@@ -136,9 +133,13 @@ static ssize_t at24_write_i2c(struct at24_dev_data_t *at24, const char *buf,
 	struct i2c_msg msg;
 	ssize_t status = 0;
 
+
+	if (count > AT24C02_PAGE_SIZE)
+		count = AT24C02_PAGE_SIZE;
+
 	client = at24->client;
 
-	ERR_DBUG("client->addr : %d!\n", client->addr);
+	// ERR_DBUG("client->addr : %d!\n", client->addr);
 	msg.addr = client->addr;
 	msg.flags = 0;
 
@@ -147,8 +148,7 @@ static ssize_t at24_write_i2c(struct at24_dev_data_t *at24, const char *buf,
 	msg.buf[0] = offset;
 	memcpy(&msg.buf[1], buf, count);
 	msg.len = 1 + count;
-	ERR_DBUG("&msg.buf[1]= %s, len = %d\r\n", &msg.buf[1], msg.len);
-	ERR_DBUG("msg.buf= %s, len = %d\r\n", msg.buf, msg.len);
+
 	loop_until_timeout(timeout, write_time) {
 		status = i2c_transfer(client->adapter, &msg, 1);
 		if (status == 1)
@@ -166,7 +166,7 @@ static ssize_t at24_write_i2c(struct at24_dev_data_t *at24, const char *buf,
 
 static int at24_open(struct inode *inode, struct file *filp)
 {
-	printk("open at24_dev:%s major=%d,minor=%d\r\n", at24_dev.client->name, MAJOR(at24_dev.dt), MINOR(at24_dev.dt));
+	// printk("open at24_dev:%s major=%d,minor=%d\r\n", at24_dev.client->name, MAJOR(at24_dev.dt), MINOR(at24_dev.dt));
 	filp->private_data = &at24_dev;
 
 	return 0;
@@ -174,7 +174,7 @@ static int at24_open(struct inode *inode, struct file *filp)
 }
 static int at24_release(struct inode *inode, struct file *filp)
 {
-	printk("close at24_dev:%s major=%d,minor=%d\r\n", at24_dev.client->name, MAJOR(at24_dev.dt), MINOR(at24_dev.dt));
+	// printk("close at24_dev:%s major=%d,minor=%d\r\n", at24_dev.client->name, MAJOR(at24_dev.dt), MINOR(at24_dev.dt));
 	return 0;
 }
 
@@ -274,7 +274,6 @@ static long at24_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 						addr = addr + AT24C02_PAGE_SIZE;
 						data = data + AT24C02_PAGE_SIZE;	
 					}
-					ERR_DBUG("data = %s \r\n", data);
 				}
 			}
 
