@@ -44,13 +44,15 @@ int main(int argc, char *argv[])
     {
         buffer.addr = strtoul(argv[3], NULL, 0); //address
         buffer.len = strlen(argv[4]);                            //wirte count
-        buffer.data = argv[4];
+        buffer.data = (char *)malloc(buffer.len * sizeof(char));
+        memcpy(buffer.data, argv[4], buffer.len);
         retvalue = ioctl(fd, IOC_AT24C02_WRITE, &buffer);
         if(retvalue < 0)
         {
             return retvalue;
         }
         printf("wirte %s to adress %s sucessfully\n", argv[2], argv[3]);
+        free(buffer.data);
     }
     else if(!strcmp((const char *)("r"), (const char *)(argv[2])))
     {
@@ -67,6 +69,8 @@ int main(int argc, char *argv[])
     }
     else 
     {
+		printf("Usage: %s <dev> r <addr> <read count>\n", argv[0]);
+		printf("       %s <dev> w <addr> <data>\n", argv[0]);
         return -1;
     }
 
