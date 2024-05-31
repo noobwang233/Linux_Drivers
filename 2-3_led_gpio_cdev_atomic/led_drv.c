@@ -31,7 +31,7 @@ struct led_dev_t
     struct platform_device *led_pdev;
     int gpio;                           /* led 所使用的 GPIO 编号 */
     // spinlock_t lock;                    /* 读写自旋锁 */
-    atomic_t status;                    /* 设备状态*/
+    atomic_t status;                    /* 设备自旋锁*/
     struct cdev *led_cdev;              /* 字符设备结构体*/
     struct class *cls;
     struct device *dev;
