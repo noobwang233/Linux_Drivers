@@ -18,6 +18,9 @@
 #include <linux/timer.h>
 #include <linux/input.h>
 
+#define GPIO_ACTIVE_HIGH 0
+#define GPIO_ACTIVE_LOW 1
+
 #define DEV_COUNT 2
 /*private date*/
 /* device struct 设备结构体*/
@@ -31,10 +34,11 @@ struct key_dev_t
     struct input_dev *inputdev;// input_dev
     unsigned int kcode; //按键code
     struct timer_list timer; //用于消抖的计时器
+    unsigned int active;
 };
 // match table
 const struct of_device_id keys_of_match_table[] = {
-    {.compatible = "key_gpio",},
+    {.compatible = "my_key",},
     {},
 };
 struct key_dev_t *key_devs[DEV_COUNT] = {0};
@@ -74,6 +78,9 @@ void key_time_function(unsigned long arg)
 
     spin_lock_irqsave(&key_dev->lock, flags);
     value = gpio_get_value(key_dev->gpio);
+    if (key_dev->active == GPIO_ACTIVE_LOW) {
+        value = !value;
+    }
     if(value == atomic_read(&key_dev->key_value_temp))
     {
         //操作有效
@@ -291,6 +298,15 @@ static int key_drv_probe(struct platform_device *device)
         goto free_key_dev;
     }
     printk("get kcode %d !\n", key_devs[index]->kcode);
+    //get active
+    retvalue = of_property_read_u32_index(np, "key_code", 3, &key_devs[index]->active);
+    if(retvalue < 0)
+    {
+        pr_err("can not get kcode !\n");
+        goto free_key_dev;
+    }
+    printk("get active %d !\n", key_devs[index]->active);
+
 
     retvalue = key_dev_init(key_devs[index]);
     if(retvalue != 0)
@@ -360,14 +376,21 @@ static void __exit key_drv_exit(void)
 irqreturn_t key_irq_handler(int irq, void *dev)
 {
     u8 value;
+    struct key_dev_t *key_dev = (struct key_dev_t *)dev;
+    printk("%s irq_handler!\n", (key_dev)->key_pdev->name);
 
-    printk("%s irq_handler!\n", ((struct key_dev_t *)dev)->key_pdev->name);
-    spin_lock(&((struct key_dev_t *)dev)->lock);
-    value = gpio_get_value(((struct key_dev_t *)dev)->gpio);
-    atomic_set(&((struct key_dev_t *)dev)->key_value_temp, value);
-    printk("gpio %d key_value_temp %d!\n",((struct key_dev_t *)dev)->gpio, value);
-    mod_timer(&((struct key_dev_t *)dev)->timer, jiffies + msecs_to_jiffies(15));//延迟15ms
-    spin_unlock(&((struct key_dev_t *)dev)->lock);
+    spin_lock(&(key_dev->lock));
+
+    value = gpio_get_value(key_dev->gpio);
+    if (key_dev->active == GPIO_ACTIVE_LOW) {
+        value = !value;
+    }
+    atomic_set(&(key_dev->key_value_temp), value);
+    printk("gpio %d key_value_temp %d!\n",(key_dev)->gpio, value);
+
+    mod_timer(&(key_dev->timer), jiffies + msecs_to_jiffies(15));//延迟15ms
+
+    spin_unlock(&(key_dev->lock));
     return IRQ_RETVAL(IRQ_HANDLED);
 }
 
