@@ -299,10 +299,10 @@ static int key_drv_probe(struct platform_device *device)
     }
     printk("get kcode %d !\n", key_devs[index]->kcode);
     //get active
-    retvalue = of_property_read_u32_index(np, "key_code", 3, &key_devs[index]->active);
+    retvalue = of_property_read_u32_index(np, "key-gpio", 2, &key_devs[index]->active);
     if(retvalue < 0)
     {
-        pr_err("can not get kcode !\n");
+        pr_err("can not get active !\n");
         goto free_key_dev;
     }
     printk("get active %d !\n", key_devs[index]->active);
