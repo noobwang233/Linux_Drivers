@@ -10,11 +10,11 @@
 // OLED设备结构体定义
 struct oled_dev_data_t
 {
-    dev_t  dt;                   /* 设备号 	 */
-    struct cdev *oled_cdev;         /* 字符设备结构体*/
-	struct device *dev;	        /* 设备 	 */
-    struct i2c_client *client;      //因为只有一个i2c地址，所以只用一个指针变量
-    char    *writebuf;
+    dev_t  dt;                      /* 设备号 	 */
+    struct cdev *at24_cdev;         /* 字符设备结构体*/
+	struct device *dev;	            /* 设备 	 */
+    struct i2c_client *client;      // 因为只有一个i2c地址，所以只用一个指针变量
+    char    *buffer;                // 显存
     char    name[15];
 };
 

@@ -198,6 +198,39 @@ fail:
     return retvalue;
 }
 
+static void goodix_read_config(struct goodix_ts_data *ts)
+{
+	u8 config[GOODIX_CONFIG_MAX_LENGTH];
+	int error;
+
+	error = goodix_i2c_read(ts->client, GOODIX_REG_CONFIG_DATA,
+			      config,
+			   GOODIX_CONFIG_MAX_LENGTH);
+	if (error) {
+		dev_warn(&ts->client->dev,
+			 "Error reading config (%d), using defaults\n",
+			 error);
+		ts->abs_x_max = GOODIX_MAX_WIDTH;
+		ts->abs_y_max = GOODIX_MAX_HEIGHT;
+		ts->int_trigger_type = GOODIX_INT_TRIGGER;
+		ts->max_touch_num = GOODIX_MAX_CONTACTS;
+		return;
+	}
+
+	ts->abs_x_max = get_unaligned_le16(&config[RESOLUTION_LOC]);
+	ts->abs_y_max = get_unaligned_le16(&config[RESOLUTION_LOC + 2]);
+	ts->int_trigger_type = config[TRIGGER_LOC] & 0x03;
+	ts->max_touch_num = config[MAX_CONTACTS_LOC] & 0x0f;
+	if (!ts->abs_x_max || !ts->abs_y_max || !ts->max_touch_num) {
+		dev_err(&ts->client->dev,
+			"Invalid config, using defaults\n");
+		ts->abs_x_max = GOODIX_MAX_WIDTH;
+		ts->abs_y_max = GOODIX_MAX_HEIGHT;
+		ts->max_touch_num = GOODIX_MAX_CONTACTS;
+	}
+}
+
+
 static u8 touch_write_reg(struct i2c_touch_dev *dev, u16 reg, u8 *data, u8 len)
 {
     u8 buffer[256];
@@ -306,6 +339,7 @@ static int i2c_touch_drv_probe(struct i2c_client *client, const struct i2c_devic
 
     /* 1. 设置i2c client */
     dev->client = client;
+	i2c_set_clientdata(client, dev);
 
     /* 2.1 获取中断的gpio号 */
     dev->irq_pin = of_get_named_gpio(client->dev.of_node, "interrupt-gpios", 0);
