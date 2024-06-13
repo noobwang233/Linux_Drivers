@@ -5,17 +5,22 @@
 #include <linux/miscdevice.h>
 #include <linux/i2c.h>      //i2c子系统相关头文件
 
+#define IOC_OLED_DRAW_POINT     100
+#define IOC_OLED_DRAW_LINE      101
+
+typedef enum {
+  OLED_COLOR_NORMAL = 0, // 正常模式 黑底白字
+  OLED_COLOR_REVERSED    // 反色模式 白底黑字
+} OLED_ColorMode;
 
 
-// OLED设备结构体定义
-struct oled_dev_data_t
-{
-    dev_t  dt;                      /* 设备号 	 */
-    struct cdev *at24_cdev;         /* 字符设备结构体*/
-	struct device *dev;	            /* 设备 	 */
-    struct i2c_client *client;      // 因为只有一个i2c地址，所以只用一个指针变量
-    char    *buffer;                // 显存
-    char    name[15];
+/* 变量声明 */
+struct oled_buf{
+    int x1;
+    int y1;
+    int x2;
+    int y2;
+    OLED_ColorMode color;
 };
 
 #endif

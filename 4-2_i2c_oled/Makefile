@@ -17,18 +17,28 @@ obj-m += $(DIRVER_NAME).o
 # $(DIRVER_NAME)-objs = led_drv.o # 可以支持多个c文件
 build: kernel_modules
 
-kernel_modules:
-	export ARCH=arm
-	export CROSS_COMPILE=arm-linux-gnueabihf-
+kernel_modules: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(DIRVER_NAME).ko $(OUTPUT_DIR)/$(DTB_NAME).dtb
+
+
+$(OUTPUT_DIR):
+	@mkdir -p $(OUTPUT_DIR)
+
+$(OUTPUT_DIR)/$(DIRVER_NAME).ko: $(DIRVER_NAME).c
+	@export ARCH=arm
+	@export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) M=$(CURRENT_PATH) modules
+	cp $(DIRVER_NAME).ko $(OUTPUT_DIR)/ -f
+
+$(OUTPUT_DIR)/$(DTB_NAME).dtb: $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dts
+	@export ARCH=arm
+	@export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) $(DTB_NAME).dtb
 	cp $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb $(OUTPUT_DIR)/ -f
-	cp $(DIRVER_NAME).ko $(OUTPUT_DIR)/
-app:
+
+$(OUTPUT_DIR)/$(APP_NAME): $(APP_NAME).c
 	arm-linux-gnueabihf-gcc -o $(APP_NAME) $(APP_NAME).c
 	cp $(APP_NAME)  $(OUTPUT_DIR)/
-reinit:
-	rm -rf  $(OUTPUT_DIR)
-	mkdir $(OUTPUT_DIR)
+
+.PHONY: clean
 clean:
 	rm -rf *.o *app *.ko .*.o.d .*.cmd *.mod.* *.temp *.mod modules.order Module.symvers .tmp_versions
