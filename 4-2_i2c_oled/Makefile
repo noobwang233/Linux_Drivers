@@ -19,6 +19,9 @@ build: kernel_modules
 
 kernel_modules: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(DIRVER_NAME).ko $(OUTPUT_DIR)/$(DTB_NAME).dtb
 
+app: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(APP_NAME)
+
+all: kernel_modules app
 
 $(OUTPUT_DIR):
 	@mkdir -p $(OUTPUT_DIR)
@@ -39,6 +42,8 @@ $(OUTPUT_DIR)/$(APP_NAME): $(APP_NAME).c
 	arm-linux-gnueabihf-gcc -o $(APP_NAME) $(APP_NAME).c
 	cp $(APP_NAME)  $(OUTPUT_DIR)/
 
-.PHONY: clean
+.PHONY: clean clean_all
 clean:
 	rm -rf *.o *app *.ko .*.o.d .*.cmd *.mod.* *.temp *.mod modules.order Module.symvers .tmp_versions
+clean_all:
+	rm -rf $(OUTPUT_DIR) *.o *app *.ko .*.o.d .*.cmd *.mod.* *.temp *.mod modules.order Module.symvers .tmp_versions

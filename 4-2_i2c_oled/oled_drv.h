@@ -2,7 +2,6 @@
 #define  __OLED_DRV_H
 
 #include <linux/types.h>
-#include <linux/miscdevice.h>
 #include <linux/i2c.h>      //i2c子系统相关头文件
 
 #define IOC_OLED_DRAW_POINT             100
