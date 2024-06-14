@@ -11,8 +11,8 @@
 #define IOC_OLED_DRAW_RECTANGLE_FILLED  103
 
 typedef enum {
-  OLED_COLOR_NORMAL = 0, // 正常模式 黑底白字
-  OLED_COLOR_REVERSED    // 反色模式 白底黑字
+    OLED_COLOR_NORMAL = 0, // 正常模式 黑底白字
+    OLED_COLOR_REVERSED    // 反色模式 白底黑字
 } OLED_ColorMode;
 
 
