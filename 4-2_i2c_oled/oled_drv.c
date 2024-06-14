@@ -14,7 +14,6 @@
 #include "linux/printk.h"
 #include "oled_drv.h" 
 
-
 // OLED参数
 #define OLED_PAGE       8                      // OLED页数
 #define OLED_ROW        8 * OLED_PAGE          // OLED行数
@@ -54,6 +53,60 @@ static int oled_open(struct inode *inode, struct file *filp);
 //module init and exit
 static int __init oled_drv_init(void);
 static void __exit oled_drv_exit(void);
+
+static void OLED_NewFrame(void);
+static void OLED_ShowFrame(void);
+static void OLED_SetPixel(uint8_t x, uint8_t y, OLED_ColorMode color);
+
+static void OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, OLED_ColorMode color);
+static void OLED_DrawRectangle(uint8_t x, uint8_t y, uint8_t w, uint8_t h, OLED_ColorMode color);
+static void OLED_DrawFilledRectangle(uint8_t x, uint8_t y, uint8_t w, uint8_t h, OLED_ColorMode color);
+
+const uint8_t sh1106_InitCmd[] = {
+  /*0xae,0X00,0X10,0x40,0X81,0XCF,0xff,0xa1,0xa4,
+  0xA6,0xc8,0xa8,0x3F,0xd5,0x80,0xd3,0x00,0XDA,0X12,
+  0x8d,0x14,0xdb,0x40,0X20,0X02,0xd9,0xf1,0xAF*/
+       0xAE,//关闭显示
+	
+       0xD5,//设置时钟分频因子,震荡频率
+       0x80,  //[3:0],分频因子;[7:4],震荡频率
+
+       0xA8,//设置驱动路数
+       0X3F,//默认(1/64)
+	
+       0xD3,//设置显示偏移
+       0X00,//默认为0
+	
+       0x40,//设置显示开始行 [5:0],行数.
+	
+       0x8D,//电荷泵设置
+       0x14,//bit2，开启/关闭
+       0x20,//设置内存地址模式
+       0x02,//[1:0],00，列地址模式;01，行地址模式;10,页地址模式;默认10;
+       0xA1,//段重定义设置,bit0:0,0->0;1,0->127;  A1
+	
+       0xC8,//设置COM扫描方向;bit3:0,普通模式;1,重定义模式 COM[N-1]->COM0;N:驱动路数 (C0 翻转显示) C8
+	   
+       0xDA,//设置COM硬件引脚配置
+       0x12,//[5:4]配置  
+	   
+       0x81,//对比度设置
+       0x66,//1~255;默认0X7F (亮度设置,越大越亮)
+	   
+       0xD9,//设置预充电周期
+       0xf1,//[3:0],PHASE 1;[7:4],PHASE 2;
+	   
+       0xDB,//设置VCOMH 电压倍率
+       0x30,//[6:4] 000,0.65*vcc;001,0.77*vcc;011,0.83*vcc;
+	   
+       0xA4,//全局显示开启;bit0:1,开启;0,关闭;(白屏/黑屏)
+	   
+       0xA6,//设置显示方式;bit0:1,反相显示;0,正常显示 
+       
+    //    0xAF,//开启显示     
+};
+
+
 // 使用i2c_transfer
 static ssize_t oled_write_i2c(struct oled_dev_data_t *oled, char *buf, size_t count);
 /* private date definition */
@@ -142,6 +195,23 @@ static int OLED_SendCmd(const char cmd) {
     }
 }
 
+
+void OLED_Init(void)
+{
+    uint8_t i;
+    const uint8_t *InitCmd = sh1106_InitCmd;
+    const uint8_t len = sizeof(sh1106_InitCmd) / sizeof(sh1106_InitCmd[0]);
+    for(i = 0; i < len; i++)
+    {
+        OLED_SendCmd(InitCmd[i]);
+    }
+
+    OLED_NewFrame();
+    OLED_ShowFrame();
+
+    OLED_SendCmd(0xAF); /*开启显示 display ON*/
+}
+
 // ========================== 显存操作函数 ==========================
 
 /**
@@ -207,53 +277,108 @@ void OLED_SetPixel(uint8_t x, uint8_t y, OLED_ColorMode color) {
 void OLED_DrawLine(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, OLED_ColorMode color) {
     uint8_t x, y;
     static uint8_t temp = 0;
-    if (x1 == x2) {
-    if (y1 > y2) {
-      temp = y1;
-      y1 = y2;
-      y2 = temp;
-    }
-    for (y = y1; y <= y2; y++) {
-      OLED_SetPixel(x1, y, color);
-    }
-    } else if (y1 == y2) {
-    if (x1 > x2) {
-      temp = x1;
-      x1 = x2;
-      x2 = temp;
-    }
-    for (x = x1; x <= x2; x++) {
-      OLED_SetPixel(x, y1, color);
-    }
-  } else {
-    // Bresenham直线算法
-    int16_t dx = x2 - x1;
-    int16_t dy = y2 - y1;
-    int16_t ux = ((dx > 0) << 1) - 1;
-    int16_t uy = ((dy > 0) << 1) - 1;
-    int16_t x = x1, y = y1, eps = 0;
-    dx = abs(dx);
-    dy = abs(dy);
-    if (dx > dy) {
-      for (x = x1; x != x2; x += ux) {
-        OLED_SetPixel(x, y, color);
-        eps += dy;
-        if ((eps << 1) >= dx) {
-          y += uy;
-          eps -= dx;
+    if (x1 == x2) 
+    {
+        if (y1 > y2) 
+        {
+            temp = y1;
+            y1 = y2;
+            y2 = temp;
         }
-      }
-    } else {
-      for (y = y1; y != y2; y += uy) {
-        OLED_SetPixel(x, y, color);
-        eps += dx;
-        if ((eps << 1) >= dy) {
-          x += ux;
-          eps -= dy;
+        for (y = y1; y <= y2; y++) 
+        {
+            OLED_SetPixel(x1, y, color);
         }
-      }
+    } 
+    else if (y1 == y2) 
+    {
+        if (x1 > x2) {
+            temp = x1;
+            x1 = x2;
+            x2 = temp;
+        }
+        for (x = x1; x <= x2; x++) 
+        {
+            OLED_SetPixel(x, y1, color);
+        }
+    } 
+    else 
+    {
+        // Bresenham直线算法
+        int16_t dx = x2 - x1;
+        int16_t dy = y2 - y1;
+        int16_t ux = ((dx > 0) << 1) - 1;
+        int16_t uy = ((dy > 0) << 1) - 1;
+        int16_t x = x1, y = y1, eps = 0;
+        dx = abs(dx);
+        dy = abs(dy);
+        if (dx > dy) 
+        {
+            for (x = x1; x != x2; x += ux) 
+            {
+                OLED_SetPixel(x, y, color);
+                eps += dy;
+                if ((eps << 1) >= dx) 
+                {
+                    y += uy;
+                    eps -= dx;
+                }
+            }
+        } 
+        else 
+        {
+            for (y = y1; y != y2; y += uy) {
+                OLED_SetPixel(x, y, color);
+                eps += dx;
+                if ((eps << 1) >= dy) 
+                {
+                    x += ux;
+                    eps -= dy;
+                }
+            }
+        }
     }
-  }
+}
+
+
+/**
+ * @brief 绘制一个矩形
+ * @param x 起始点横坐标
+ * @param y 起始点纵坐标
+ * @param w 矩形宽度
+ * @param h 矩形高度
+ * @param color 颜色
+ */
+void OLED_DrawRectangle(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, OLED_ColorMode color) {
+    uint8_t w, h, x, y;
+    w = abs(x2 - x1);
+    h = abs(y2 - y1);
+    x = x1 < x2 ? x1 :x2;
+    y = y1 < y2 ? y1 :y2;
+    OLED_DrawLine(x, y, x + w, y, color);
+    OLED_DrawLine(x, y + h, x + w, y + h, color);
+    OLED_DrawLine(x, y, x, y + h, color);
+    OLED_DrawLine(x + w, y, x + w, y + h, color);
+}
+
+/**
+ * @brief 绘制一个填充矩形
+ * @param x 起始点横坐标
+ * @param y 起始点纵坐标
+ * @param w 矩形宽度
+ * @param h 矩形高度
+ * @param color 颜色
+ */
+void OLED_DrawFilledRectangle(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2, OLED_ColorMode color) {
+    uint8_t i;
+    uint8_t w, h, x, y;
+    w = abs(x2 - x1);
+    h = abs(y2 - y1);
+    x = x1 < x2 ? x1 :x2;
+    y = y1 < y2 ? y1 :y2;
+    for (i = 0; i < h; i++) {
+        OLED_DrawLine(x, y+i, x+w-1, y+i, color);
+    }
 }
 
 static int oled_open(struct inode *inode, struct file *filp)
@@ -287,12 +412,29 @@ static long oled_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         case IOC_OLED_DRAW_POINT:
         {
             OLED_NewFrame();
-
+            OLED_SetPixel(ker_buf.x1, ker_buf.y1, ker_buf.color);
+            OLED_ShowFrame();
             break;
         }
         case IOC_OLED_DRAW_LINE:
         {
-
+            OLED_NewFrame();
+            OLED_DrawLine(ker_buf.x1, ker_buf.y1, ker_buf.x2, ker_buf.y2,ker_buf.color);
+            OLED_ShowFrame();
+            break;
+        }
+        case IOC_OLED_DRAW_RECTANGLE:
+        {
+            OLED_NewFrame();
+            OLED_DrawRectangle(ker_buf.x1, ker_buf.y1, ker_buf.x2, ker_buf.y2,ker_buf.color);
+            OLED_ShowFrame();
+            break;
+        }
+        case IOC_OLED_DRAW_RECTANGLE_FILLED:
+        {
+            OLED_NewFrame();
+            OLED_DrawFilledRectangle(ker_buf.x1, ker_buf.y1, ker_buf.x2, ker_buf.y2,ker_buf.color);
+            OLED_ShowFrame();
             break;
         }
         default:
@@ -307,12 +449,6 @@ static long oled_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 static int oled_drv_probe(struct i2c_client *client, const struct i2c_device_id *dt)
 {
     int retvalue;
-
-    // check the functionality if it supports i2c
-    if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
-        ERR_DBUG("i2c adapter doesn't support i2c func!\n");
-        return -EPFNOSUPPORT;
-    }
 
     /* 使用cdev注册字符设备 */
     oled_dev.oled_cdev = cdev_alloc();//申请cdev字符设备的空间
@@ -369,7 +505,12 @@ static int oled_drv_probe(struct i2c_client *client, const struct i2c_device_id 
 
     oled_dev.client = client;
     memcpy(client->name, (const char *)oled_dev.name, strlen(oled_dev.name));
+    
+    OLED_Init();
+
     printk("oled_drv_probe successfully!\n");
+
+
     return 0;
 
 freedevt:

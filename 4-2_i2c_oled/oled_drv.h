@@ -5,8 +5,10 @@
 #include <linux/miscdevice.h>
 #include <linux/i2c.h>      //i2c子系统相关头文件
 
-#define IOC_OLED_DRAW_POINT     100
-#define IOC_OLED_DRAW_LINE      101
+#define IOC_OLED_DRAW_POINT             100
+#define IOC_OLED_DRAW_LINE              101
+#define IOC_OLED_DRAW_RECTANGLE         102
+#define IOC_OLED_DRAW_RECTANGLE_FILLED  103
 
 typedef enum {
   OLED_COLOR_NORMAL = 0, // 正常模式 黑底白字
