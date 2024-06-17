@@ -14,6 +14,11 @@
 #include "linux/printk.h"
 #include "oled_drv.h" 
 
+/**************接线******************/
+/* I2C1 SCL ---- SCL         */
+/* I2C1 SDA ---- SDA         */
+
+
 // OLED参数
 #define OLED_PAGE       8                      // OLED页数
 #define OLED_ROW        8 * OLED_PAGE          // OLED行数
@@ -54,7 +59,7 @@ static int oled_open(struct inode *inode, struct file *filp);
 static int __init oled_drv_init(void);
 static void __exit oled_drv_exit(void);
 
-static void OLED_NewFrame(void);
+static void OLED_NewFrame(OLED_ColorMode color);
 static void OLED_ShowFrame(void);
 static void OLED_SetPixel(uint8_t x, uint8_t y, OLED_ColorMode color);
 
@@ -206,7 +211,7 @@ void OLED_Init(void)
         OLED_SendCmd(InitCmd[i]);
     }
 
-    OLED_NewFrame();
+    OLED_NewFrame(OLED_COLOR_NORMAL);
     OLED_ShowFrame();
 
     OLED_SendCmd(0xAF); /*开启显示 display ON*/
@@ -217,8 +222,12 @@ void OLED_Init(void)
 /**
  * @brief 清空显存 绘制新的一帧
  */
-static void OLED_NewFrame(void) {
-    memset((void *)OLED_GRAM, 0, sizeof(OLED_GRAM));
+static void OLED_NewFrame(OLED_ColorMode color)
+{
+    if (color != OLED_COLOR_NORMAL)
+        memset((void *)OLED_GRAM, 0xFFFFFFFF, sizeof(OLED_GRAM));
+    else
+        memset((void *)OLED_GRAM, 0, sizeof(OLED_GRAM));
 }
 
 static void OLED_PageSet(unsigned char page)
@@ -411,28 +420,28 @@ static long oled_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     switch (cmd) {
         case IOC_OLED_DRAW_POINT:
         {
-            OLED_NewFrame();
+            OLED_NewFrame(ker_buf.color);
             OLED_SetPixel(ker_buf.x1, ker_buf.y1, ker_buf.color);
             OLED_ShowFrame();
             break;
         }
         case IOC_OLED_DRAW_LINE:
         {
-            OLED_NewFrame();
+            OLED_NewFrame(ker_buf.color);
             OLED_DrawLine(ker_buf.x1, ker_buf.y1, ker_buf.x2, ker_buf.y2,ker_buf.color);
             OLED_ShowFrame();
             break;
         }
         case IOC_OLED_DRAW_RECTANGLE:
         {
-            OLED_NewFrame();
+            OLED_NewFrame(ker_buf.color);
             OLED_DrawRectangle(ker_buf.x1, ker_buf.y1, ker_buf.x2, ker_buf.y2,ker_buf.color);
             OLED_ShowFrame();
             break;
         }
         case IOC_OLED_DRAW_RECTANGLE_FILLED:
         {
-            OLED_NewFrame();
+            OLED_NewFrame(ker_buf.color);
             OLED_DrawFilledRectangle(ker_buf.x1, ker_buf.y1, ker_buf.x2, ker_buf.y2,ker_buf.color);
             OLED_ShowFrame();
             break;

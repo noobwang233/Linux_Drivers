@@ -14,6 +14,11 @@
 #include "linux/printk.h"
 #include "oled_drv.h" 
 
+/**************接线******************/
+/* I2C1 SCL ---- SCL         */
+/* I2C1 SDA ---- SDA         */
+
+
 // OLED参数
 #define OLED_PAGE       8                      // OLED页数
 #define OLED_ROW        8 * OLED_PAGE          // OLED行数
