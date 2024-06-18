@@ -6,6 +6,7 @@
 #include <linux/i2c.h>          //i2c子系统相关头文件
 #include <linux/fb.h>
 #include <linux/delay.h>
+#include <linux/kthread.h> // 包含 kthread_create 函数的定义
 
 /***************************************** 接线 *********************************************/
 /* I2C1 SCL ---- SCL         */
@@ -13,11 +14,13 @@
 
 
 /***************************************** 宏定义 *********************************************/
-#define SH1106_DATA         0x40
-#define SH1106_COMMAND      0x00
+#define SH1106_DATA             0x40
+#define SH1106_COMMAND          0x00
 
-#define SH1106_DISPLAY_ON   0xAF
+#define SH1106_DISPLAY_OFF    0xAE
+#define SH1106_DISPLAY_ON     0xAF
 
+#define SH1106_COLUMN_OFFSET  2
 
 /***************************************** 数据类型定义 *********************************************/
 // OLED设备结构体定义
@@ -55,20 +58,6 @@ static int __init oled_drv_init(void);
 static void __exit oled_drv_exit(void);
 
 /***************************************** 全局变量 *********************************************/
-static struct fb_fix_screeninfo sh1106_fb_fix = {
-    .id        = "oled_sh1106",
-    .type        = FB_TYPE_PACKED_PIXELS,
-    .visual        = FB_VISUAL_MONO10,
-    .xpanstep    = 0,
-    .ypanstep    = 0,
-    .ywrapstep    = 0,
-    .accel        = FB_ACCEL_NONE,
-};
-
-static struct fb_var_screeninfo sh1106_fb_var = {
-    .bits_per_pixel    = 1,
-};
-
 /* oled初始化参数 */
 const uint8_t sh1106_InitCmd[] = {
     0xAE,//关闭显示
@@ -110,7 +99,7 @@ const uint8_t sh1106_InitCmd[] = {
 
 };
 
-
+struct task_struct *oled_kthread;
 
 
 
@@ -171,72 +160,108 @@ static inline int sh1106_fb_write_cmd(struct i2c_client *client, u8 cmd)
     return ret;
 }
 
+static void sh1106_page_set(struct i2c_client *client, unsigned char page)
+{
+    sh1106_fb_write_cmd(client, 0xb0+page);
+}
+
+static void sh1106_column_set(struct i2c_client *client, unsigned char column)
+{
+    column += SH1106_COLUMN_OFFSET;
+    sh1106_fb_write_cmd(client, 0x10 |(column >> 4));        // 设置列地址高4位
+    sh1106_fb_write_cmd(client, 0x00 |(column & 0x0F));      // 设置列地址低4位
+}
+
+
 /**
  * @brief 刷新sh1106的显存，显示新画面
  */
-static void sh1106_fb_update_display(struct sh1106_fb_par *par)
+static int sh1106_fb_update_display(void *data)
 {
     struct sh1106_fb_array *array;
+    struct sh1106_fb_par *par = data;
+
     u8 *vmem = par->info->screen_base;
+
+    unsigned int line_length = par->info->fix.line_length;
+    int pages = DIV_ROUND_UP(par->height, 8);
     int i, j, k;
 
-    printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
-    array = sh1106_fb_alloc_array(par->width * par->height / 8,
-                      SH1106_DATA);
-    if (!array)
-        return;
+    while (1) {
+        printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
 
-    /*
-     * The screen is divided in pages, each having a height of 8
-     * pixels, and the width of the screen. When sending a byte of
-     * data to the controller, it gives the 8 bits for the current
-     * column. I.e, the first byte are the 8 bits of the first
-     * column, then the 8 bits for the second column, etc.
-     *
-     *
-     * Representation of the screen, assuming it is 5 bits
-     * wide. Each letter-number combination is a bit that controls
-     * one pixel.
-     *
-     * A0 A1 A2 A3 A4
-     * B0 B1 B2 B3 B4
-     * C0 C1 C2 C3 C4
-     * D0 D1 D2 D3 D4
-     * E0 E1 E2 E3 E4
-     * F0 F1 F2 F3 F4
-     * G0 G1 G2 G3 G4
-     * H0 H1 H2 H3 H4
-     *
-     * If you want to update this screen, you need to send 5 bytes:
-     *  (1) A0 B0 C0 D0 E0 F0 G0 H0
-     *  (2) A1 B1 C1 D1 E1 F1 G1 H1
-     *  (3) A2 B2 C2 D2 E2 F2 G2 H2
-     *  (4) A3 B3 C3 D3 E3 F3 G3 H3
-     *  (5) A4 B4 C4 D4 E4 F4 G4 H4
-     */
+        /*
+        * The screen is divided in pages, each having a height of 8
+        * pixels, and the width of the screen. When sending a byte of
+        * data to the controller, it gives the 8 bits for the current
+        * column. I.e, the first byte are the 8 bits of the first
+        * column, then the 8 bits for the second column, etc.
+        *
+        *
+        * Representation of the screen, assuming it is 5 bits
+        * wide. Each letter-number combination is a bit that controls
+        * one pixel.
+        *
+        * A0 A1 A2 A3 A4
+        * B0 B1 B2 B3 B4
+        * C0 C1 C2 C3 C4
+        * D0 D1 D2 D3 D4
+        * E0 E1 E2 E3 E4
+        * F0 F1 F2 F3 F4
+        * G0 G1 G2 G3 G4
+        * H0 H1 H2 H3 H4
+        *
+        * If you want to update this screen, you need to send 5 bytes:
+        *  (1) A0 B0 C0 D0 E0 F0 G0 H0
+        *  (2) A1 B1 C1 D1 E1 F1 G1 H1
+        *  (3) A2 B2 C2 D2 E2 F2 G2 H2
+        *  (4) A3 B3 C3 D3 E3 F3 G3 H3
+        *  (5) A4 B4 C4 D4 E4 F4 G4 H4
+        */
 
-    for (i = 0; i < (par->height / 8); i++)
-    {
-        for (j = 0; j < par->width; j++)
+        for (i = 0; i < pages; i++)
         {
-            u32 array_idx = i * par->width + j;
-            array->data[array_idx] = 0;
-            for (k = 0; k < 8; k++)
+            array = sh1106_fb_alloc_array(par->width,
+                            SH1106_DATA);
+            if (!array)
+                return -1;
+
+            sh1106_page_set(par->client, i);
+            sh1106_column_set(par->client, 0);
+
+            for (j = 0; j < par->width; j++)
             {
-                u32 page_length = par->width * i;
-                u32 index = page_length + (par->width * k + j) / 8;
-                u8 byte = *(vmem + index);
-                u8 bit = byte & (1 << (j % 8));
-                bit = bit >> (j % 8);
-                array->data[array_idx] |= bit << k;
+                u32 array_idx = j;
+                array->data[array_idx] = 0;
+                for (k = 0; k < 8; k++)
+                {
+                    u8 byte = vmem[(8 * i + k) * line_length + j / 8];
+                    u8 bit = (byte >> (j % 8)) & 1;
+                    array->data[array_idx] |= bit << k;
+                }
             }
+            sh1106_fb_write_array(par->client, array, par->width);
+            kfree(array);
+        }
+
+        set_current_state(TASK_INTERRUPTIBLE);
+        schedule_timeout(HZ);
+
+        if (kthread_should_stop()) {
+            set_current_state(TASK_RUNNING);
+            break;
         }
     }
 
-    sh1106_fb_write_array(par->client, array, par->width * par->height / 8);
-    kfree(array);
+    return 0;
 }
 
+
+static void sh1106_fb_clear(struct sh1106_fb_par *par)
+{
+    u8 *vmem = par->info->screen_base;
+    memset(vmem, 0, par->width * par->height / 8);
+}
 
 static ssize_t sh1106_fb_write(struct fb_info *info, const char __user *buf,
                                 size_t count, loff_t *ppos)
@@ -301,18 +326,6 @@ static struct fb_ops sh1106_fb_ops = {
     .fb_imageblit    = sh1106_fb_imageblit,
 };
 
-static void sh1106_fb_deferred_io(struct fb_info *info,
-                struct list_head *pagelist)
-{
-    sh1106_fb_update_display(info->par);
-}
-
-static struct fb_deferred_io sh1106_fb_defio = {
-    .delay        = HZ,
-    .deferred_io    = sh1106_fb_deferred_io,
-};
-
-
 static int sh1106_init(struct sh1106_fb_par *par)
 {
     int ret;
@@ -352,16 +365,19 @@ static int oled_drv_probe(struct i2c_client *client, const struct i2c_device_id 
         return -EINVAL;
     }
 
+    /* 1. 分配/设置/注册 fb_info */
     info = framebuffer_alloc(sizeof(struct sh1106_fb_par), &client->dev);
     if (!info) {
         dev_err(&client->dev, "Couldn't allocate framebuffer.\n");
         return -ENOMEM;
     }
 
+    /* 2. 设置sh1106参数 */
     par = info->par;
     par->info = info;
     par->client = client;
 
+    /* 3. 获取oled 长、宽 */
     if (of_property_read_u32(node, "width", &par->width))
         par->width = 96;
 
@@ -371,6 +387,7 @@ static int oled_drv_probe(struct i2c_client *client, const struct i2c_device_id 
     if (of_property_read_u32(node, "page-offset", &par->page_offset))
         par->page_offset = 0;
 
+    /* 4. 分配显存 */
     vmem_size = par->width * par->height / 8;
 
     vmem = devm_kzalloc(&client->dev, vmem_size, GFP_KERNEL);
@@ -380,12 +397,20 @@ static int oled_drv_probe(struct i2c_client *client, const struct i2c_device_id 
         goto fb_alloc_error;
     }
 
+    /* 5. 设置fb_info */
     info->fbops = &sh1106_fb_ops;
-    info->fix = sh1106_fb_fix;
-    info->fix.line_length = par->width / 8;
-    info->fbdefio = &sh1106_fb_defio;
 
-    info->var = sh1106_fb_var;
+    /* a. fix */
+    strncpy(info->fix.id, "sh1106_oled", sizeof("sh1106_oled"));
+    info->screen_base = (u8 __force __iomem *)vmem; /* fb的物理地址 */
+    info->fix.smem_start = (unsigned long)vmem;
+    info->fix.smem_len = vmem_size;
+    info->fix.line_length = par->width / 8;         //每行的长度
+    info->fix.type = FB_TYPE_PACKED_PIXELS;         //表示像素类型
+    info->fix.visual = FB_VISUAL_MONO10;            //表示单色屏幕
+
+    /* b. var : LCD分辨率、颜色格式 */
+    info->var.bits_per_pixel = 1;
     info->var.xres = par->width;
     info->var.xres_virtual = par->width;
     info->var.yres = par->height;
@@ -398,34 +423,30 @@ static int oled_drv_probe(struct i2c_client *client, const struct i2c_device_id 
     info->var.blue.length = 1;
     info->var.blue.offset = 0;
 
-    info->screen_base = (u8 __force __iomem *)vmem;
-    info->fix.smem_start = (unsigned long)vmem;
-    info->fix.smem_len = vmem_size;
-
-    fb_deferred_io_init(info);
+    sh1106_fb_clear(par);
 
     i2c_set_clientdata(client, info);
 
     ret = sh1106_init(par);
     if (ret)
     {
-        goto reset_oled_error;
+        goto fb_alloc_error;
     }
-
 
     ret = register_framebuffer(info);
     if (ret) {
         dev_err(&client->dev, "Couldn't register the framebuffer\n");
-        goto reset_oled_error;
+        goto fb_alloc_error;
     }
-
     dev_info(&client->dev, "fb%d: %s framebuffer device registered, using %d bytes of video memory\n", info->node, info->fix.id, vmem_size);
+
+    /* 创建1个内核线程,用来把Framebuffer的数据通过SPI控制器发送给OLED */
+    oled_kthread = kthread_create(sh1106_fb_update_display, par, "pgg_oled_pd");
+    wake_up_process(oled_kthread);
+
     printk("==========%s success =======\n", __FUNCTION__);
     return 0;
 
-
-reset_oled_error:
-    fb_deferred_io_cleanup(info);
 fb_alloc_error:
     framebuffer_release(info);
     printk("==========%s failed =======\n", __FUNCTION__);
@@ -444,8 +465,10 @@ static int oled_drv_remove(struct i2c_client *client)
 
     printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
 
+    kthread_stop(oled_kthread);
+
     unregister_framebuffer(info);
-    fb_deferred_io_cleanup(info);
+
     framebuffer_release(info);
 
     printk("==========%s success =======\n", __FUNCTION__);
