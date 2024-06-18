@@ -13,12 +13,6 @@
 
 
 /***************************************** 宏定义 *********************************************/
-// OLED参数
-#define OLED_PAGE           8                      // OLED页数
-#define OLED_ROW            8 * OLED_PAGE          // OLED行数
-#define OLED_COLUMN         128                    // OLED列数
-#define OLED_COLUMN_OFFSET  2
-
 #define SH1106_DATA         0x40
 #define SH1106_COMMAND      0x00
 
@@ -186,6 +180,7 @@ static void sh1106_fb_update_display(struct sh1106_fb_par *par)
     u8 *vmem = par->info->screen_base;
     int i, j, k;
 
+    printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
     array = sh1106_fb_alloc_array(par->width * par->height / 8,
                       SH1106_DATA);
     if (!array)
@@ -251,6 +246,7 @@ static ssize_t sh1106_fb_write(struct fb_info *info, const char __user *buf,
     unsigned long p = *ppos;
     u8 __iomem *dst;
 
+    printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
     total_size = info->fix.smem_len;
 
     if (p > total_size)
@@ -291,29 +287,29 @@ static void sh1106_fb_copyarea(struct fb_info *info, const struct fb_copyarea *a
 
 static void sh1106_fb_imageblit(struct fb_info *info, const struct fb_image *image)
 {
-	struct sh1106_fb_par *par = info->par;
-	sys_imageblit(info, image);
-	sh1106_fb_update_display(par);
+    struct sh1106_fb_par *par = info->par;
+    sys_imageblit(info, image);
+    sh1106_fb_update_display(par);
 }
 
 static struct fb_ops sh1106_fb_ops = {
-	.owner		= THIS_MODULE,
-	.fb_read	= fb_sys_read,
-	.fb_write	= sh1106_fb_write,
-	.fb_fillrect	= sh1106_fb_fillrect,
-	.fb_copyarea	= sh1106_fb_copyarea,
-	.fb_imageblit	= sh1106_fb_imageblit,
+    .owner        = THIS_MODULE,
+    .fb_read    = fb_sys_read,
+    .fb_write    = sh1106_fb_write,
+    .fb_fillrect    = sh1106_fb_fillrect,
+    .fb_copyarea    = sh1106_fb_copyarea,
+    .fb_imageblit    = sh1106_fb_imageblit,
 };
 
 static void sh1106_fb_deferred_io(struct fb_info *info,
-				struct list_head *pagelist)
+                struct list_head *pagelist)
 {
-	sh1106_fb_update_display(info->par);
+    sh1106_fb_update_display(info->par);
 }
 
 static struct fb_deferred_io sh1106_fb_defio = {
-	.delay		= HZ,
-	.deferred_io	= sh1106_fb_deferred_io,
+    .delay        = HZ,
+    .deferred_io    = sh1106_fb_deferred_io,
 };
 
 
@@ -323,6 +319,8 @@ static int sh1106_init(struct sh1106_fb_par *par)
     uint8_t i;
     const uint8_t *InitCmd = sh1106_InitCmd;
     const uint8_t len = sizeof(sh1106_InitCmd) / sizeof(sh1106_InitCmd[0]);
+
+    printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
     for(i = 0; i < len; i++)
     {
         ret = sh1106_fb_write_cmd(par->client, InitCmd[i]);
@@ -342,71 +340,71 @@ static int oled_drv_probe(struct i2c_client *client, const struct i2c_device_id 
 {
     struct fb_info *info;
     struct device_node *node = client->dev.of_node;
-	u32 vmem_size;
-	struct sh1106_fb_par *par;
-	u8 *vmem;
-	int ret;
+    u32 vmem_size;
+    struct sh1106_fb_par *par;
+    u8 *vmem;
+    int ret;
 
     printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
 
-	if (!node) {
-		dev_err(&client->dev, "No device tree data found!\n");
-		return -EINVAL;
-	}
+    if (!node) {
+        dev_err(&client->dev, "No device tree data found!\n");
+        return -EINVAL;
+    }
 
-	info = framebuffer_alloc(sizeof(struct sh1106_fb_par), &client->dev);
-	if (!info) {
-		dev_err(&client->dev, "Couldn't allocate framebuffer.\n");
-		return -ENOMEM;
-	}
+    info = framebuffer_alloc(sizeof(struct sh1106_fb_par), &client->dev);
+    if (!info) {
+        dev_err(&client->dev, "Couldn't allocate framebuffer.\n");
+        return -ENOMEM;
+    }
 
-	par = info->par;
-	par->info = info;
-	par->client = client;
+    par = info->par;
+    par->info = info;
+    par->client = client;
 
-	if (of_property_read_u32(node, "width", &par->width))
-		par->width = 96;
+    if (of_property_read_u32(node, "width", &par->width))
+        par->width = 96;
 
-	if (of_property_read_u32(node, "height", &par->height))
-		par->height = 16;
+    if (of_property_read_u32(node, "height", &par->height))
+        par->height = 16;
 
-	if (of_property_read_u32(node, "page-offset", &par->page_offset))
-		par->page_offset = 1;
+    if (of_property_read_u32(node, "page-offset", &par->page_offset))
+        par->page_offset = 0;
 
-	vmem_size = par->width * par->height / 8;
+    vmem_size = par->width * par->height / 8;
 
-	vmem = devm_kzalloc(&client->dev, vmem_size, GFP_KERNEL);
-	if (!vmem) {
-		dev_err(&client->dev, "Couldn't allocate graphical memory.\n");
-		ret = -ENOMEM;
-		goto fb_alloc_error;
-	}
+    vmem = devm_kzalloc(&client->dev, vmem_size, GFP_KERNEL);
+    if (!vmem) {
+        dev_err(&client->dev, "Couldn't allocate graphical memory.\n");
+        ret = -ENOMEM;
+        goto fb_alloc_error;
+    }
 
-	info->fbops = &sh1106_fb_ops;
-	info->fix = sh1106_fb_fix;
-	info->fix.line_length = par->width / 8;
-	info->fbdefio = &sh1106_fb_defio;
+    info->fbops = &sh1106_fb_ops;
+    info->fix = sh1106_fb_fix;
+    info->fix.line_length = par->width / 8;
+    info->fbdefio = &sh1106_fb_defio;
 
-	info->var = sh1106_fb_var;
-	info->var.xres = par->width;
-	info->var.xres_virtual = par->width;
-	info->var.yres = par->height;
-	info->var.yres_virtual = par->height;
+    info->var = sh1106_fb_var;
+    info->var.xres = par->width;
+    info->var.xres_virtual = par->width;
+    info->var.yres = par->height;
+    info->var.yres_virtual = par->height;
 
-	info->var.red.length = 1;
-	info->var.red.offset = 0;
-	info->var.green.length = 1;
-	info->var.green.offset = 0;
-	info->var.blue.length = 1;
-	info->var.blue.offset = 0;
+    info->var.red.length = 1;
+    info->var.red.offset = 0;
+    info->var.green.length = 1;
+    info->var.green.offset = 0;
+    info->var.blue.length = 1;
+    info->var.blue.offset = 0;
 
-	info->screen_base = (u8 __force __iomem *)vmem;
-	info->fix.smem_start = (unsigned long)vmem;
-	info->fix.smem_len = vmem_size;
+    info->screen_base = (u8 __force __iomem *)vmem;
+    info->fix.smem_start = (unsigned long)vmem;
+    info->fix.smem_len = vmem_size;
 
-	fb_deferred_io_init(info);
+    fb_deferred_io_init(info);
 
-	i2c_set_clientdata(client, info);
+    i2c_set_clientdata(client, info);
 
     ret = sh1106_init(par);
     if (ret)
@@ -415,21 +413,21 @@ static int oled_drv_probe(struct i2c_client *client, const struct i2c_device_id 
     }
 
 
-	ret = register_framebuffer(info);
-	if (ret) {
-		dev_err(&client->dev, "Couldn't register the framebuffer\n");
-		goto reset_oled_error;
-	}
+    ret = register_framebuffer(info);
+    if (ret) {
+        dev_err(&client->dev, "Couldn't register the framebuffer\n");
+        goto reset_oled_error;
+    }
 
-	dev_info(&client->dev, "fb%d: %s framebuffer device registered, using %d bytes of video memory\n", info->node, info->fix.id, vmem_size);
+    dev_info(&client->dev, "fb%d: %s framebuffer device registered, using %d bytes of video memory\n", info->node, info->fix.id, vmem_size);
     printk("==========%s success =======\n", __FUNCTION__);
-	return 0;
+    return 0;
 
 
 reset_oled_error:
-	fb_deferred_io_cleanup(info);
+    fb_deferred_io_cleanup(info);
 fb_alloc_error:
-	framebuffer_release(info);
+    framebuffer_release(info);
     printk("==========%s failed =======\n", __FUNCTION__);
     return ret;
 
@@ -442,13 +440,13 @@ fb_alloc_error:
  */
 static int oled_drv_remove(struct i2c_client *client)
 {
-	struct fb_info *info = i2c_get_clientdata(client);
+    struct fb_info *info = i2c_get_clientdata(client);
 
     printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
 
-	unregister_framebuffer(info);
-	fb_deferred_io_cleanup(info);
-	framebuffer_release(info);
+    unregister_framebuffer(info);
+    fb_deferred_io_cleanup(info);
+    framebuffer_release(info);
 
     printk("==========%s success =======\n", __FUNCTION__);
     return 0;
