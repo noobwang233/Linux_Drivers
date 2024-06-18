@@ -10,3 +10,12 @@
 **/.cache/*
 **/.cache/clangd/index/**.idx
 **/compile_commands.json
+**/.*.ko.cmd
+**/.*.mod.cmd
+**/.*.mod.o.cmd
+**/.*.o.cmd
+**/Module.symvers
+**/modules.order
+**/*.ko
+**/*.mod
+**/*.mod.c

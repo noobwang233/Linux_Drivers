@@ -6,44 +6,40 @@
 # 请参考各开发板的高级用户使用手册
 
 MODULE_NAME := oled_fb
-DTB_NAME := imx6ull-atk-mini-emmc
+DTB_NAME := stm32mp157d-atk
 DIRVER_NAME := $(MODULE_NAME)_drv
 APP_NAME := $(MODULE_NAME)_app
-KERNELDIR := $(shell pwd)/../../kernel/linux-imx_4.1.15
+KERNELDIR := $(shell pwd)/../../kernel
 CURRENT_PATH := $(shell pwd)
-OUTPUT_DIR := ~/OSD_share/$(MODULE_NAME)
+OUTPUT_DIR := ~/Linux/stm32mp157/nfs/rootfs/lib/modules/5.4.31
+DTB_DIR	:= ~/Linux/stm32mp157/tftp
 
 obj-m += $(DIRVER_NAME).o
 # $(DIRVER_NAME)-objs = led_drv.o # 可以支持多个c文件
 build: kernel_modules
 
-kernel_modules: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(DIRVER_NAME).ko $(OUTPUT_DIR)/$(DTB_NAME).dtb
+kernel_modules: $(OUTPUT_DIR)/$(DIRVER_NAME).ko $(DTB_DIR)/$(DTB_NAME).dtb
 
-app: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(APP_NAME)
+app: $(OUTPUT_DIR)/$(APP_NAME)
 
 all: kernel_modules app
-
-$(OUTPUT_DIR):
-	@mkdir -p $(OUTPUT_DIR)
 
 $(OUTPUT_DIR)/$(DIRVER_NAME).ko: $(DIRVER_NAME).c
 	@export ARCH=arm
 	@export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) M=$(CURRENT_PATH) modules
-	cp $(DIRVER_NAME).ko $(OUTPUT_DIR)/ -f
+	sudo cp $(DIRVER_NAME).ko $(OUTPUT_DIR)/ -f
 
-$(OUTPUT_DIR)/$(DTB_NAME).dtb: $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dts
+$(DTB_DIR)/$(DTB_NAME).dtb: $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dts
 	@export ARCH=arm
 	@export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) $(DTB_NAME).dtb
-	cp $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb $(OUTPUT_DIR)/ -f
+	sudo cp $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb $(DTB_DIR)/ -f
 
 $(OUTPUT_DIR)/$(APP_NAME): $(APP_NAME).c
 	arm-linux-gnueabihf-gcc -o $(APP_NAME) $(APP_NAME).c
-	cp $(APP_NAME)  $(OUTPUT_DIR)/
+	sudo cp $(APP_NAME)  $(OUTPUT_DIR)/
 
-.PHONY: clean clean_all
+.PHONY: clean
 clean:
-	rm -rf *.o *app *.ko .*.o.d .*.cmd *.mod.* *.temp *.mod modules.order Module.symvers .tmp_versions
-clean_all:
-	rm -rf $(OUTPUT_DIR) *.o *app *.ko .*.o.d .*.cmd *.mod.* *.temp *.mod modules.order Module.symvers .tmp_versions
+	sudo rm -rf *.o *app *.ko .*.o.d .*.cmd *.mod.* *.temp *.mod modules.order Module.symvers .tmp_versions

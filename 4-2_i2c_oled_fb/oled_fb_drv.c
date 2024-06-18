@@ -201,8 +201,7 @@ static int sh1106_fb_update_display(struct sh1106_fb_par *par)
     array = sh1106_fb_alloc_array(par->width, SH1106_DATA);
     if (!array)
         return -1;
-    
-    printk("s\n");
+
     for (i = 0; i < pages; i++)
     {
         sh1106_page_set(par->client, i);
