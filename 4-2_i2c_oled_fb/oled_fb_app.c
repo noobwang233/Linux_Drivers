@@ -131,8 +131,7 @@ int main ()
     memset(fbp, 0x00, 1024);
     setTimer(3,0);
     while(1){
-        for(i=0;i<1024;i++)
-        {
+        for(i=0;i<1024;i++){
             fbp[i]=lichee[i];
         }
         setTimer(3,0);
