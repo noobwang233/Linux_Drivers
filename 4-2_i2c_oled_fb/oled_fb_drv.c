@@ -201,8 +201,34 @@ static int sh1106_fb_update_display(struct sh1106_fb_par *par)
     array = sh1106_fb_alloc_array(par->width, SH1106_DATA);
     if (!array)
         return -1;
-    
-    printk("s\n");
+    /*
+     * The screen is divided in pages, each having a height of 8
+     * pixels, and the width of the screen. When sending a byte of
+     * data to the controller, it gives the 8 bits for the current
+     * column. I.e, the first byte are the 8 bits of the first
+     * column, then the 8 bits for the second column, etc.
+     *
+     *
+     * Representation of the screen, assuming it is 5 bits
+     * wide. Each letter-number combination is a bit that controls
+     * one pixel.
+     *
+     * A0 A1 A2 A3 A4
+     * B0 B1 B2 B3 B4
+     * C0 C1 C2 C3 C4
+     * D0 D1 D2 D3 D4
+     * E0 E1 E2 E3 E4
+     * F0 F1 F2 F3 F4
+     * G0 G1 G2 G3 G4
+     * H0 H1 H2 H3 H4
+     *
+     * If you want to update this screen, you need to send 5 bytes:
+     *  (1) A0 B0 C0 D0 E0 F0 G0 H0
+     *  (2) A1 B1 C1 D1 E1 F1 G1 H1
+     *  (3) A2 B2 C2 D2 E2 F2 G2 H2
+     *  (4) A3 B3 C3 D3 E3 F3 G3 H3
+     *  (5) A4 B4 C4 D4 E4 F4 G4 H4
+     */
     for (i = 0; i < pages; i++)
     {
         sh1106_page_set(par->client, i);
