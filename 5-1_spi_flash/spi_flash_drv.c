@@ -26,8 +26,8 @@
 /**************接线******************/
 /* UART2_RXD SPI3_SCLk  ------ SCL          */
 /* UART2_CTS SPI3_MOSI  ------ SDA          */
-/* GPIO_4               ------ BLK          */
 /* UART2_TXD SPI3_SS0   ------ CS           */
+/* GPIO_4               ------ BLK          */
 /* GPIO_2               ------ DC           */
 /* GPIO_1               ------ RST          */
 
@@ -84,7 +84,6 @@ struct st7735s_dev {
     void *private_data;         /* 私有数据     */
     int dc_gpio;                /* 命令选择引脚 */
     int res_gpio;               /* 屏幕复位引脚 */
-    int cs_gpio;                /* 片选引脚     */
     int bl_gpio;                /* 背光引脚     */
 };
 static struct st7735s_dev st7735sdev;
@@ -234,19 +233,19 @@ static const struct file_operations st7735s_ops = {
 /* 写入屏幕地址函数 */
 void Address_set(struct st7735s_dev *dev,unsigned int x1,unsigned int y1,unsigned int x2,unsigned int y2)
 { 
-    write_command(dev,0x2a);
+    write_command(dev,ST7735_CASET);
     write_data(dev,x1>>8);
     write_data(dev,x1);
     write_data(dev,x2>>8);
     write_data(dev,x2);
 
-    write_command(dev,0x2b);
+    write_command(dev,ST7735_RASET);
     write_data(dev,y1>>8);
     write_data(dev,y1);
     write_data(dev,y2>>8);
     write_data(dev,y2);
 
-    write_command(dev,0x2C);
+    write_command(dev,ST7735_RAMWR);
 }
 
 /*
@@ -408,18 +407,6 @@ static int st7735s_probe(struct spi_device *spi)
         return PTR_ERR(st7735sdev.device);
     }
 
-    /* 获取设备树中cs片选信号 */
-    st7735sdev.nd =  of_get_parent(spi->dev.of_node); // 根据设备节点的父节点寻找
-    if(st7735sdev.nd == NULL) {
-        printk("ecspi1 node not find!\r\n");
-        goto get_err;
-    }
-    st7735sdev.cs_gpio = of_get_named_gpio(st7735sdev.nd, "cs-gpio", 0);
-    if(st7735sdev.cs_gpio < 0) {
-        printk("can't get cs-gpio!\r\n");
-        goto get_err;
-    }
-
     /* 获取设备树中Res复位, DC(data or command), BL GPIO ，请根据实际设备树修改*/
     st7735sdev.nd = spi->dev.of_node;
 
@@ -442,10 +429,6 @@ static int st7735s_probe(struct spi_device *spi)
     }
 
     /* 设置GPIO为输出，并且输出高电平 */
-    ret = gpio_direction_output(st7735sdev.cs_gpio, 1);
-    if(ret < 0) {
-        printk("can't set cs gpio!\r\n");
-    }
     ret = gpio_direction_output(st7735sdev.res_gpio, 1);
     if(ret < 0) {
         printk("can't set res gpio!\r\n");
