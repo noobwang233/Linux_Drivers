@@ -61,6 +61,8 @@
 #define ST7735_GMCTRP1			0xE0	//Gamma '+'polarity Correction characteristics setting
 #define ST7735_GMCTRN1			0xE1	//Gamma '-'polarity Correction characteristics setting
 #define ST7735_COLMOD			0x3A	//interface pixel format
+#define ST7735_TEST			    0xF0	//Enable test command
+#define ST7735_DIS_RAM_PW       0xF6	//Disable ram power save mode
 #define ST7735_CASET			0x2A	//column address set
 #define ST7735_RASET			0x2B	//Row Address Set
 #define ST7735_RAMWR			0x2C	//Memory write
@@ -99,40 +101,47 @@ struct spi_lcd_cmd {
 
 struct spi_lcd_cmd cmds[] = {
 /*   cmd                数据长度    发送完成之后的延时 */
-    {ST7735_SleepOut,       0,      120}, 
-    {ST7735_FullColor,      3,      0}, 
-    {ST7735_8Colors,        3,      0}, 
-    {ST7735_InPartialMode,  6,      0}, 
-    {ST7735_INVCTR,         1,      0}, 
-    {ST7735_PWCTR1,         3,      0}, 
-    {ST7735_PWCTR2,         1,      0}, 
-    {ST7735_PWCTR3,         2,      0}, 
-    {ST7735_PWCTR4,         2,      0}, 
-    {ST7735_PWCTR5,         2,      0}, 
-    {ST7735_VMCTR1,         1,      0}, 
-    {ST7735_MADCTL,         1,      0}, 
-    {ST7735_GMCTRP1,        16,     0}, 
+    {ST7735_SleepOut,       0,      120},
+    {ST7735_FullColor,      3,      0},
+    {ST7735_8Colors,        3,      0},
+    {ST7735_InPartialMode,  6,      0},
+    {ST7735_INVCTR,         1,      0},
+    {ST7735_PWCTR1,         3,      0},
+    {ST7735_PWCTR2,         1,      0},
+    {ST7735_PWCTR3,         2,      0},
+    {ST7735_PWCTR4,         2,      0},
+    {ST7735_PWCTR5,         2,      0},
+    {ST7735_VMCTR1,         1,      0},
+    {ST7735_MADCTL,         1,      0},
+    {ST7735_GMCTRP1,        16,     0},
     {ST7735_GMCTRN1,        16,     0},
+    {ST7735_CASET,          4,      0},
+    {ST7735_RASET,          4,      0},
+    {ST7735_TEST,           1,      0},
+    {ST7735_DIS_RAM_PW,     1,      0},
     {ST7735_COLMOD,         1,      0},
     {ST7735_DISPON,         0,      0}
 };
 
 /* st7735s数据集 */
 u8 spi_lcd_datas[] = {
-    0x05,0x3C,0x3C,                 //B1
-    0x05,0x3C,0x3C,                 //B2
-    0x05,0x3C,0x3C,0x05,0x3C,0x3C,  //B3
-    0x03,                           //B4
-    0x28,0x08,0x04,                 //C0
-    0xC0,                           //C1
-    0x0D,0x00,                      //C2
-    0x8D,0x2A,                      //C3
-    0x8D,0xEE,                      //C4
-    0x1A,                           //C5
-    0xC0,                           // 0x36配置：横屏RGB 0xA0 | 竖屏RGB 0xC0 | 横屏BGE 0xA8 | 竖屏RGB 0xC8
-    0x04,0x22,0x07,0x0A,0x2E,0x30,0x25,0x2A,0x28,0x26,0x2E,0x3A,0x00,0x01,0x03,0x13, //E0
-    0x04,0x16,0x06,0x0D,0x2D,0x26,0x23,0x27,0x27,0x25,0x2D,0x3B,0x00,0x01,0x04,0x13, //E1
-    0x05                            //3A
+	0x01,0x2C,0x2D,
+	0x01,0x2C,0x2D,
+	0x01,0x2C,0x2D,0x01,0x2C,0x2D,
+	0x07,
+	0xA2,0x02,0x84,0xC1,0xC5,
+	0x0A,0x00,
+	0x8A,0x2A,
+	0x8A,0xEE,
+	0x0E,
+	0xC0,// 0x36配置：横屏RGB 0xA0 | 竖屏RGB 0xC0 | 横屏BGE 0xA8 | 竖屏RGB 0xC8
+	0x0f,0x1a,0x0f,0x18,0x2f,0x28,0x20,0x22,0x1f,0x1b,0x23,0x37,0x00,0x07,0x02,0x10,
+	0x0f,0x1b,0x0f,0x17,0x33,0x2c,0x29,0x2e,0x30,0x30,0x39,0x3f,0x00,0x07,0x03,0x10,
+	0x00,0x00,0x00,0x7F,
+	0x00,0x00,0x00,0x9F,
+	0x01,
+	0x00,
+	0x05,
 };
 
 /*
@@ -237,13 +246,13 @@ void Address_set(struct st7735s_dev *dev,unsigned int x1,unsigned int y1,unsigne
     write_data(dev,x1>>8);
     write_data(dev,x1);
     write_data(dev,x2>>8);
-    write_data(dev,x2);
+    write_data(dev,x2 + 2);
 
     write_command(dev,ST7735_RASET);
     write_data(dev,y1>>8);
     write_data(dev,y1);
     write_data(dev,y2>>8);
-    write_data(dev,y2);
+    write_data(dev,y2 + 1);
 
     write_command(dev,ST7735_RAMWR);
 }
