@@ -15,9 +15,11 @@ OUTPUT_DIR := ~/OSD_share/$(MODULE_NAME)
 
 obj-m += $(DIRVER_NAME).o
 # $(DIRVER_NAME)-objs = led_drv.o # 可以支持多个c文件
-build: kernel_modules
+build: kernel_modules copy
 
-kernel_modules: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(DIRVER_NAME).ko $(OUTPUT_DIR)/$(DTB_NAME).dtb
+copy: $(OUTPUT_DIR)/$(DIRVER_NAME).ko $(OUTPUT_DIR)/$(DTB_NAME).dtb
+
+kernel_modules: $(OUTPUT_DIR) $(DIRVER_NAME).ko $(DTB_NAME).dtb
 
 app: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(APP_NAME)
 
@@ -26,17 +28,21 @@ all: kernel_modules app
 $(OUTPUT_DIR):
 	@mkdir -p $(OUTPUT_DIR)
 
-$(OUTPUT_DIR)/$(DIRVER_NAME).ko: $(DIRVER_NAME).c
+$(OUTPUT_DIR)/$(DIRVER_NAME).ko: $(DIRVER_NAME).ko
+	cp $(DIRVER_NAME).ko $(OUTPUT_DIR)/ -f
+
+$(DIRVER_NAME).ko: $(DIRVER_NAME).c *.h
 	@export ARCH=arm
 	@export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) M=$(CURRENT_PATH) modules
-	cp $(DIRVER_NAME).ko $(OUTPUT_DIR)/ -f
 
-$(OUTPUT_DIR)/$(DTB_NAME).dtb: $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dts
+$(OUTPUT_DIR)/$(DTB_NAME).dtb: $(DTB_NAME).dtb
+	cp $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb $(OUTPUT_DIR)/ -f
+
+$(DTB_NAME).dtb: $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dts
 	@export ARCH=arm
 	@export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) $(DTB_NAME).dtb
-	cp $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb $(OUTPUT_DIR)/ -f
 
 $(OUTPUT_DIR)/$(APP_NAME): $(APP_NAME).c
 	arm-linux-gnueabihf-gcc -o $(APP_NAME) $(APP_NAME).c

@@ -6,7 +6,7 @@
 #include "string.h"
 #include <stdio.h>
 #include <sys/ioctl.h>
-#include "oled_drv.h"
+#include "spi_lcd_drv.h"
 
 
 int main(int argc, char *argv[])

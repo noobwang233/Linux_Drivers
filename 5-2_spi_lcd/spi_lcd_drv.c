@@ -46,27 +46,27 @@
 
 /***************************** command ***************************/
  
-#define	ST7735_SleepOut         0x11	
-#define	ST7735_FullColor        0xB1	//in normal mode
-#define ST7735_8Colors          0xB2	//in idle mode
-#define	ST7735_InPartialMode    0xB3	//
-#define ST7735_INVCTR           0xB4	//display inversion control
-#define	ST7735_PWCTR1           0xC0	//power control 1
-#define	ST7735_PWCTR2			0xC1	//power control 2
-#define	ST7735_PWCTR3			0xC2	//power control 3
-#define	ST7735_PWCTR4			0xC3	//power control 4
-#define	ST7735_PWCTR5			0xC4	//power control 5
-#define	ST7735_VMCTR1			0xC5	//VCOM	control 1
-#define ST7735_MADCTL			0x36	//Memory data access control
-#define ST7735_GMCTRP1			0xE0	//Gamma '+'polarity Correction characteristics setting
-#define ST7735_GMCTRN1			0xE1	//Gamma '-'polarity Correction characteristics setting
-#define ST7735_COLMOD			0x3A	//interface pixel format
-#define ST7735_TEST			    0xF0	//Enable test command
-#define ST7735_DIS_RAM_PW       0xF6	//Disable ram power save mode
-#define ST7735_CASET			0x2A	//column address set
-#define ST7735_RASET			0x2B	//Row Address Set
-#define ST7735_RAMWR			0x2C	//Memory write
-#define ST7735_DISPON			0x29	//display on
+#define ST7735_SleepOut         0x11    
+#define ST7735_FullColor        0xB1    //in normal mode
+#define ST7735_8Colors          0xB2    //in idle mode
+#define ST7735_InPartialMode    0xB3    //
+#define ST7735_INVCTR           0xB4    //display inversion control
+#define ST7735_PWCTR1           0xC0    //power control 1
+#define ST7735_PWCTR2           0xC1    //power control 2
+#define ST7735_PWCTR3           0xC2    //power control 3
+#define ST7735_PWCTR4           0xC3    //power control 4
+#define ST7735_PWCTR5           0xC4    //power control 5
+#define ST7735_VMCTR1           0xC5    //VCOM    control 1
+#define ST7735_MADCTL           0x36    //Memory data access control
+#define ST7735_GMCTRP1          0xE0    //Gamma '+'polarity Correction characteristics setting
+#define ST7735_GMCTRN1          0xE1    //Gamma '-'polarity Correction characteristics setting
+#define ST7735_COLMOD           0x3A    //interface pixel format
+#define ST7735_TEST             0xF0    //Enable test command
+#define ST7735_DIS_RAM_PW       0xF6    //Disable ram power save mode
+#define ST7735_CASET            0x2A    //column address set
+#define ST7735_RASET            0x2B    //Row Address Set
+#define ST7735_RAMWR            0x2C    //Memory write
+#define ST7735_DISPON           0x29    //display on
 
 
 #define RED             0xf800
@@ -87,6 +87,7 @@ struct st7735s_dev {
     int dc_gpio;                /* 命令选择引脚 */
     int res_gpio;               /* 屏幕复位引脚 */
     int bl_gpio;                /* 背光引脚     */
+    int cs_gpio;                /* 背光引脚     */
 };
 static struct st7735s_dev st7735sdev;
 
@@ -102,46 +103,47 @@ struct spi_lcd_cmd {
 struct spi_lcd_cmd cmds[] = {
 /*   cmd                数据长度    发送完成之后的延时 */
     {ST7735_SleepOut,       0,      120},
-    {ST7735_FullColor,      3,      0},
-    {ST7735_8Colors,        3,      0},
-    {ST7735_InPartialMode,  6,      0},
-    {ST7735_INVCTR,         1,      0},
-    {ST7735_PWCTR1,         3,      0},
-    {ST7735_PWCTR2,         1,      0},
-    {ST7735_PWCTR3,         2,      0},
-    {ST7735_PWCTR4,         2,      0},
-    {ST7735_PWCTR5,         2,      0},
-    {ST7735_VMCTR1,         1,      0},
-    {ST7735_MADCTL,         1,      0},
-    {ST7735_GMCTRP1,        16,     0},
-    {ST7735_GMCTRN1,        16,     0},
-    {ST7735_CASET,          4,      0},
-    {ST7735_RASET,          4,      0},
-    {ST7735_TEST,           1,      0},
-    {ST7735_DIS_RAM_PW,     1,      0},
-    {ST7735_COLMOD,         1,      0},
-    {ST7735_DISPON,         0,      0}
+    {ST7735_FullColor,      3,      10},
+    {ST7735_8Colors,        3,      10},
+    {ST7735_InPartialMode,  6,      10},
+    {ST7735_INVCTR,         1,      10},
+    {ST7735_PWCTR1,         3,      10},
+    {ST7735_PWCTR2,         1,      10},
+    {ST7735_PWCTR3,         2,      10},
+    {ST7735_PWCTR4,         2,      10},
+    {ST7735_PWCTR5,         2,      10},
+    {ST7735_VMCTR1,         1,      10},
+    {ST7735_MADCTL,         1,      10},
+    {ST7735_GMCTRP1,        16,     10},
+    {ST7735_GMCTRN1,        16,     10},
+    {ST7735_CASET,          4,      10},
+    {ST7735_RASET,          4,      10},
+    {ST7735_TEST,           1,      10},
+    {ST7735_DIS_RAM_PW,     1,      10},
+    {ST7735_COLMOD,         1,      10},
+    {ST7735_DISPON,         0,      10}
 };
 
 /* st7735s数据集 */
 u8 spi_lcd_datas[] = {
-	0x01,0x2C,0x2D,
-	0x01,0x2C,0x2D,
-	0x01,0x2C,0x2D,0x01,0x2C,0x2D,
-	0x07,
-	0xA2,0x02,0x84,0xC1,0xC5,
-	0x0A,0x00,
-	0x8A,0x2A,
-	0x8A,0xEE,
-	0x0E,
-	0xC0,// 0x36配置：横屏RGB 0xA0 | 竖屏RGB 0xC0 | 横屏BGE 0xA8 | 竖屏RGB 0xC8
-	0x0f,0x1a,0x0f,0x18,0x2f,0x28,0x20,0x22,0x1f,0x1b,0x23,0x37,0x00,0x07,0x02,0x10,
-	0x0f,0x1b,0x0f,0x17,0x33,0x2c,0x29,0x2e,0x30,0x30,0x39,0x3f,0x00,0x07,0x03,0x10,
-	0x00,0x00,0x00,0x7F,
-	0x00,0x00,0x00,0x9F,
-	0x01,
-	0x00,
-	0x05,
+    0x01,0x2C,0x2D,
+    0x01,0x2C,0x2D,
+    0x01,0x2C,0x2D,0x01,0x2C,0x2D,
+    0x07,
+    0xA2,0x02,0x84,
+    0xC5,
+    0x0A,0x00,
+    0x8A,0x2A,
+    0x8A,0xEE,
+    0x0E,
+    0xA0,// 0x36配置：横屏RGB 0xA0 | 竖屏RGB 0xC0 | 横屏BGE 0xA8 | 竖屏RGB 0xC8
+    0x0f,0x1a,0x0f,0x18,0x2f,0x28,0x20,0x22,0x1f,0x1b,0x23,0x37,0x00,0x07,0x02,0x10,
+    0x0f,0x1b,0x0f,0x17,0x33,0x2c,0x29,0x2e,0x30,0x30,0x39,0x3f,0x00,0x07,0x03,0x10,
+    0x00,0x00,0x00,0x7F,
+    0x00,0x00,0x00,0x9F,
+    0x01,
+    0x00,
+    0x05,
 };
 
 /*
@@ -188,26 +190,44 @@ void write_command(struct st7735s_dev *dev, u8 cmd)
 {
     // dc , command:0
     gpio_set_value(dev->dc_gpio, 0); 
+    printk("wite cmd: 0x%x\n", cmd);
     st7735s_write_onereg(dev,cmd);
 }
+
+/*
+    funciton: 写数据
+*/
+static void write_datas(struct st7735s_dev *dev, u8 *data,int len)
+{
+    u32 i = 0;
+
+    gpio_set_value(dev->dc_gpio, 1);
+    printk("wite data len: %d\n", len);
+    for (i = 0; i < len; i++) {
+        printk("index: %d data: 0x%x\n", i, data[i]);
+    }
+    st7735s_write_regs(dev, data, len);
+}
+
+/*
+    funciton: 写多个数据
+*/
+static void write_data_u16(struct st7735s_dev *dev, u16 data)
+{
+    u8 buf[2] = {0};
+    buf[0] = (u8)(data >> 8);
+    buf[1] = (u8)(data);
+
+    write_datas(dev, buf, 2);
+}
+
 /*
     funciton: 写一个数据
 */
-void write_data(struct st7735s_dev *dev, u8 data)
+void write_data_u8(struct st7735s_dev *dev, u8 data)
 {
-    // dc , command:1
-    gpio_set_value(dev->dc_gpio, 1);
-    st7735s_write_onereg(dev,data);
+    write_datas(dev, &data, 1);
 }
-// /*
-//     funciton: 写多个数据
-// */
-// static void write_datas(struct st7735s_dev *dev, int data,int len)
-// {
-//     gpio_set_value(dev->dc_gpio, 1);
-//     st7735s_write_regs(dev,(u8 *)&data,len);
-// }
-
 /*
  * @description        : 打开设备
  * @param - inode     : 传递给驱动的inode
@@ -243,16 +263,12 @@ static const struct file_operations st7735s_ops = {
 void Address_set(struct st7735s_dev *dev,unsigned int x1,unsigned int y1,unsigned int x2,unsigned int y2)
 { 
     write_command(dev,ST7735_CASET);
-    write_data(dev,x1>>8);
-    write_data(dev,x1);
-    write_data(dev,x2>>8);
-    write_data(dev,x2 + 2);
+    write_data_u16(dev, x1);
+    write_data_u16(dev, x2);
 
     write_command(dev,ST7735_RASET);
-    write_data(dev,y1>>8);
-    write_data(dev,y1);
-    write_data(dev,y2>>8);
-    write_data(dev,y2 + 1);
+    write_data_u16(dev, y1);
+    write_data_u16(dev, y2);
 
     write_command(dev,ST7735_RAMWR);
 }
@@ -268,8 +284,7 @@ void LCD_Set_color(struct st7735s_dev *dev, u16 Color)
     {
         for (j=0;j<LCD_H;j++)
         {
-            write_data(dev,Color>>8);
-            write_data(dev,Color);
+            write_data_u16(dev, Color);
         }
     }
 }
@@ -289,8 +304,7 @@ void LCD_Set_area_color(struct st7735s_dev *dev, unsigned int x1, unsigned int y
     {
         for(j = 0; j < y_len; j++)
         {
-            write_data(dev,Color>>8);
-            write_data(dev,Color);
+            write_data_u16(dev, Color);
         }
     }
 }
@@ -301,8 +315,7 @@ void LCD_Set_point_color(struct st7735s_dev *dev, unsigned int x, unsigned int y
 {
     Address_set(dev,x,y,x,y);
 
-    write_data(dev,Color>>8);
-    write_data(dev,Color);
+    write_data_u16(dev, Color);
 }
 /*
     图片显示
@@ -319,10 +332,9 @@ void LCD_Set_image(struct st7735s_dev *dev, const unsigned char *p) //显示图�
     for(i=0;i<20480;i++)
      {    
         picL=*(p+i*2);    //数据低位在前
-        picH=*(p+i*2+1);                
-           //write_datas(dev, picH<<8|picL,2);  
-        write_data(dev,picH);        
-        write_data(dev,picL);                
+        picH=*(p+i*2+1);
+        write_data_u8(dev,picH);
+        write_data_u8(dev,picL);
      }    
 }
 
@@ -333,23 +345,24 @@ void LCD_Set_image(struct st7735s_dev *dev, const unsigned char *p) //显示图�
  */
 void st7735s_reginit(struct st7735s_dev *dev)
 {
-    int i, j, n;
-    gpio_set_value(st7735sdev.res_gpio, 1);
-    mdelay(1);
+    int i, n;
+
     gpio_set_value(st7735sdev.res_gpio, 0);
-    mdelay(1);
+    mdelay(500);
     gpio_set_value(st7735sdev.res_gpio, 1);
-    mdelay(120);
+    mdelay(500);
+
     n = 0; // n用于记录数据数组spi_lcd_datas的位置
     //发命令，并发出命令所需的数据
     for (i = 0; i < ARRAY_SIZE(cmds); i++) //命令
     {
         write_command(dev, cmds[i].reg_addr);
-        for (j = 0; j < cmds[i].len; j++) //发出命令后，需要发出的数据
-            if(cmds[i].len!=0)
-                write_data(dev, spi_lcd_datas[n++]);
-        printk("the n is %d\n",n);
-        if (cmds[i].delay_ms) //如有延时则延时
+        if(cmds[i].len != 0)
+        {
+            write_datas(dev, &spi_lcd_datas[n], cmds[i].len);
+            n = n + cmds[i].len;
+        }
+        if (cmds[i].delay_ms != 0) //如有延时则延时
             mdelay(cmds[i].delay_ms);
     }
 
@@ -393,6 +406,7 @@ void st7735s_reginit(struct st7735s_dev *dev)
   */
 static int st7735s_probe(struct spi_device *spi)
 {
+    struct device_node *pnd;
     int ret = 0;
 
     printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
@@ -417,6 +431,19 @@ static int st7735s_probe(struct spi_device *spi)
     if (IS_ERR(st7735sdev.device)) {
         return PTR_ERR(st7735sdev.device);
     }
+
+	/* 获取设备树中cs片选信号，请根据实际设备树修改*/
+    pnd = of_get_parent(spi->dev.of_node);
+	if(pnd == NULL) {
+		printk("ecspi1 node not find!\r\n");
+		goto get_err;
+	}
+	st7735sdev.cs_gpio = of_get_named_gpio(pnd, "cs-gpio", 0);
+	if(st7735sdev.cs_gpio < 0) {
+		printk("can't get cs-gpio!\r\n");
+		goto get_err;
+	}
+
 
     /* 获取设备树中Res复位, DC(data or command), BL GPIO ，请根据实际设备树修改*/
     st7735sdev.nd = spi->dev.of_node;
@@ -452,7 +479,11 @@ static int st7735s_probe(struct spi_device *spi)
     if(ret < 0) {
         printk("can't set bl gpio!\r\n");
     }
-    
+	ret = gpio_direction_output(st7735sdev.cs_gpio, 1);
+	if(ret < 0) {
+		printk("can't set cs gpio!\r\n");
+	}
+
     /*初始化spi_device */
     spi->mode = SPI_MODE_2;         /*MODE2，CPOL=1，CPHA=0*/
     spi_setup(spi);
