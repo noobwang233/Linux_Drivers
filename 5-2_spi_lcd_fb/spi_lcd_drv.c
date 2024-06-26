@@ -19,8 +19,7 @@
 #include <asm/mach/map.h>
 #include <asm/uaccess.h>
 #include <asm/io.h>
-#include <linux/spi/spi.h>
-
+#include <linux/fb.h>
 #include "image.h"
 
 /**************接线******************/
@@ -39,9 +38,15 @@
 #define DISP_W          160
 #define DISP_H          128
 
-#define LCD_W           DISP_W+1
-#define LCD_H           DISP_H+2
+#define LCD_W           DISP_W
+#define LCD_H           DISP_H
 
+#define RED             0xf800
+#define GREEN           0x07e0
+#define BLUE            0x001f
+#define WHITE           0xffff
+#define BLACK           0x0000
+#define YELLOW          0xFFE0
 
 
 /***************************** command ***************************/
@@ -68,13 +73,6 @@
 #define ST7735_RAMWR            0x2C    //Memory write
 #define ST7735_DISPON           0x29    //display on
 
-
-#define RED             0xf800
-#define GREEN           0x07e0
-#define BLUE            0x001f
-#define WHITE           0xffff
-#define BLACK           0x0000
-#define YELLOW          0xFFE0
 
 struct st7735s_dev {
     dev_t devid;                /* 设备号       */
@@ -145,6 +143,155 @@ u8 spi_lcd_datas[] = {
     0x00,
     0x05,
 };
+
+void st7735s_fb_show(struct fb_info *fbi, struct spi_device *spi);
+
+static int st7735s_fb_setcolreg(unsigned int regno, unsigned int red,
+                                unsigned int green, unsigned int blue,
+                                unsigned int transp, struct fb_info *info);
+
+/* framebuffer资源 */
+typedef struct {
+    struct spi_device *spi;         //记录fb_info对象对应的spi设备对象
+    struct task_struct *thread;     //记录线程对象的地址，此线程专用于把显存数据发送到屏的驱动ic
+} st7735s_data_t;
+
+struct fb_info *fbi;
+struct fb_ops fops = {
+    .owner		= THIS_MODULE,
+    .fb_setcolreg	=  st7735s_fb_setcolreg,  //实现颜色寄存器设置函数
+    .fb_fillrect	= cfb_fillrect,
+	.fb_copyarea	= cfb_copyarea,
+	.fb_imageblit	= cfb_imageblit,
+};
+
+
+int fb_thread_func(void *data)
+{
+    printk("===========%s : %s=============\n", __FUNCTION__, "fb thread running...........");
+    st7735s_data_t *ldata = fbi->par;
+
+    while (1)
+    {   
+        if (kthread_should_stop())
+            break;
+        st7735s_fb_show(fbi, ldata->spi);
+    }
+
+    return 0;
+}
+
+
+
+static u32 pseudo_palette[LCD_W*LCD_H];
+/*fb_bitfield结构体：fb缓存的RGB位域，该结构描述每一个像素显示缓冲区的组织方式，
+假如为RGB565模式，R占5位=bit[11:15]，G占6位=bit[10:5] B占5位=bit[4:0] */
+static inline unsigned int chan_to_field(unsigned int chan, struct fb_bitfield *bf)
+{
+	chan &= 0xffff;
+	chan >>= 16 - bf->length;
+	return chan << bf->offset;
+}
+
+
+/* 颜色寄存器设置函数 */
+static int st7735s_fb_setcolreg(unsigned int regno, unsigned int red,
+			     unsigned int green, unsigned int blue,
+			     unsigned int transp, struct fb_info *info)
+{
+	unsigned int val;
+	
+	if (regno > 16)
+	{
+		return 1;
+	}
+
+	/* 用red,green,blue三原色构造出val  */
+	val  = chan_to_field(red,	&info->var.red);
+	val |= chan_to_field(green, &info->var.green);
+	val |= chan_to_field(blue,	&info->var.blue);
+	
+	pseudo_palette[regno] = val;
+	return 0;
+}
+
+
+/* framebuffer创建函数 */
+int st7735s_fb_create(struct spi_device *spi) //此函数在spi设备驱动的probe函数里被调用
+{
+	printk("===========%s : %s=============\n", __FUNCTION__, "start.");
+    u8 *v_addr;
+    u32 p_addr;
+    st7735s_data_t *data;
+	int X=LCD_H;
+	int Y=LCD_W;
+    /*
+        coherent:连贯的
+        分配连贯的物理内存
+    */
+    v_addr = dma_alloc_coherent(NULL, LCD_W*LCD_H*4, &p_addr, GFP_KERNEL);
+	printk("===========%s : %s=============\n", __FUNCTION__, "dma_alloc_coherent (Done).");
+    
+    //额外分配st7735s_data_t类型空间
+    fbi = framebuffer_alloc(sizeof(st7735s_data_t), NULL);
+    if(fbi == NULL){
+		printk("st7735s fbi alloc error!\n");
+        return -1;
+    }
+    data = fbi->par; //data指针指向额外分配的空间
+    data->spi = spi;
+
+    fbi->pseudo_palette = pseudo_palette;
+	fbi->var.activate       = FB_ACTIVATE_NOW;
+
+    fbi->var.xres = LCD_H;
+    fbi->var.yres = LCD_W;
+    fbi->var.xres_virtual = X;
+    fbi->var.yres_virtual = Y;
+    fbi->var.bits_per_pixel = 32; // 屏是rgb565, 但QT程序只能支持32位.还需要在刷图时把32位的像素数据转换成rgb565
+    // fbi->var.red.offset = 11;
+    // fbi->var.red.length = 5;
+    // fbi->var.green.offset = 5;
+    // fbi->var.green.length = 6;
+    // fbi->var.blue.offset = 0;
+    // fbi->var.blue.length = 5;
+    fbi->var.red.offset = 16;
+    fbi->var.red.length = 8;
+    fbi->var.green.offset = 8;
+    fbi->var.green.length = 8;
+    fbi->var.blue.offset = 0;
+    fbi->var.blue.length = 8;
+
+    strcpy(fbi->fix.id, "st7735s_fb");
+    fbi->fix.smem_start = p_addr; //显存的物理地址
+    fbi->fix.smem_len = X*Y*4; 
+    fbi->fix.type = FB_TYPE_PACKED_PIXELS;
+    fbi->fix.visual = FB_VISUAL_TRUECOLOR;
+    fbi->fix.line_length = X*4;
+
+    fbi->fbops = &fops;
+    fbi->screen_base = v_addr; //显存虚拟地址
+    fbi->screen_size = X*Y*4; //显存大小
+
+    register_framebuffer(fbi);
+	printk("===========%s : %s=============\n", __FUNCTION__, "register_framebuffer (Done).");
+    data->thread = kthread_run(fb_thread_func, fbi, spi->modalias);
+
+	printk("===========%s  :  %s=============\n", __FUNCTION__, "end.");
+    return 0;    
+}
+
+
+/* framebuffer删除函数 */
+void st7735s_fb_delete(void) //此函数在spi设备驱动remove时被调用
+{
+    st7735s_data_t *data = fbi->par;
+    kthread_stop(data->thread); //让刷图线程退出
+    unregister_framebuffer(fbi);
+    dma_free_coherent(NULL, fbi->screen_size, fbi->screen_base, fbi->fix.smem_start);
+    framebuffer_release(fbi);
+}
+
 
 /*
  * @description    : 向st7735s多个寄存器写入数据
