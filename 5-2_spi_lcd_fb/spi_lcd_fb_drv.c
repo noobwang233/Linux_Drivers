@@ -23,12 +23,12 @@
 #include "image.h"
 
 /**************接线******************/
-/* UART2_RXD SPI3_SCLk  ------ SCL          */
-/* UART2_CTS SPI3_MOSI  ------ SDA          */
-/* UART2_TXD SPI3_SS0   ------ CS           */
-/* GPIO_4               ------ BLK          */
-/* GPIO_2               ------ DC           */
-/* GPIO_1               ------ RST          */
+/* UART2_RXD SPI3_SCLk PIN18 ------ SCL          */
+/* UART2_CTS SPI3_MOSI PIN20 ------ SDA          */
+/* UART2_TXD SPI3_SS0  PIN17 ------ CS           */
+/* GPIO_4              PIN10 ------ BLK          */
+/* GPIO_2              PIN9  ------ DC           */
+/* GPIO_1              PIN7  ------ RST          */
 
 
 

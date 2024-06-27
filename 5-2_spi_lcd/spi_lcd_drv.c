@@ -24,13 +24,12 @@
 #include "image.h"
 
 /**************接线******************/
-/* UART2_RXD SPI3_SCLk  ------ SCL          */
-/* UART2_CTS SPI3_MOSI  ------ SDA          */
-/* UART2_TXD SPI3_SS0   ------ CS           */
-/* GPIO_4               ------ BLK          */
-/* GPIO_2               ------ DC           */
-/* GPIO_1               ------ RST          */
-
+/* UART2_RXD    SPI3_SCLk   PIN18 ------ SCL          */
+/* UART2_CTS    SPI3_MOSI   PIN20 ------ SDA          */
+/* UART2_TXD    SPI3_SS0    PIN17 ------ CS           */
+/* UART3_RXD    GPIO1_IO25  PIN35 ------ BLK          */
+/* UART3_TXD    GPIO1_IO24  PIN33  ------ DC          */
+/* GPIO_1                   PIN7  ------ RST          */
 
 
 #define st7735s_CNT     1
@@ -199,13 +198,13 @@ void write_command(struct st7735s_dev *dev, u8 cmd)
 */
 static void write_datas(struct st7735s_dev *dev, u8 *data,int len)
 {
-    u32 i = 0;
+    // u32 i = 0;
 
     gpio_set_value(dev->dc_gpio, 1);
-    printk("wite data len: %d\n", len);
-    for (i = 0; i < len; i++) {
-        printk("index: %d data: 0x%x\n", i, data[i]);
-    }
+    // printk("wite data len: %d\n", len);
+    // for (i = 0; i < len; i++) {
+    //     printk("index: %d data: 0x%x\n", i, data[i]);
+    // }
     st7735s_write_regs(dev, data, len);
 }
 
@@ -367,8 +366,8 @@ void st7735s_reginit(struct st7735s_dev *dev)
     }
 
     /* 全屏颜色填充测试 */
-    LCD_Set_color(dev, WHITE);
-    mdelay(1000);
+    // LCD_Set_color(dev, WHITE);
+    // mdelay(1000);
     LCD_Set_color(dev, RED);
     mdelay(1000);
     LCD_Set_color(dev, GREEN);
@@ -406,7 +405,6 @@ void st7735s_reginit(struct st7735s_dev *dev)
   */
 static int st7735s_probe(struct spi_device *spi)
 {
-    struct device_node *pnd;
     int ret = 0;
 
     printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
@@ -432,19 +430,6 @@ static int st7735s_probe(struct spi_device *spi)
         return PTR_ERR(st7735sdev.device);
     }
 
-	/* 获取设备树中cs片选信号，请根据实际设备树修改*/
-    pnd = of_get_parent(spi->dev.of_node);
-	if(pnd == NULL) {
-		printk("ecspi1 node not find!\r\n");
-		goto get_err;
-	}
-	st7735sdev.cs_gpio = of_get_named_gpio(pnd, "cs-gpio", 0);
-	if(st7735sdev.cs_gpio < 0) {
-		printk("can't get cs-gpio!\r\n");
-		goto get_err;
-	}
-
-
     /* 获取设备树中Res复位, DC(data or command), BL GPIO ，请根据实际设备树修改*/
     st7735sdev.nd = spi->dev.of_node;
 
@@ -466,6 +451,7 @@ static int st7735s_probe(struct spi_device *spi)
         goto get_err;
     }
 
+    printk("res-gpio: %d  dc-gpio: %d  bl-gpio: %d\n", st7735sdev.res_gpio, st7735sdev.dc_gpio, st7735sdev.bl_gpio);
     /* 设置GPIO为输出，并且输出高电平 */
     ret = gpio_direction_output(st7735sdev.res_gpio, 1);
     if(ret < 0) {
@@ -479,10 +465,6 @@ static int st7735s_probe(struct spi_device *spi)
     if(ret < 0) {
         printk("can't set bl gpio!\r\n");
     }
-	ret = gpio_direction_output(st7735sdev.cs_gpio, 1);
-	if(ret < 0) {
-		printk("can't set cs gpio!\r\n");
-	}
 
     /*初始化spi_device */
     spi->mode = SPI_MODE_2;         /*MODE2，CPOL=1，CPHA=0*/
