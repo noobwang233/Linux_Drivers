@@ -38,8 +38,8 @@
 #define DISP_W          160
 #define DISP_H          128
 
-#define LCD_W           DISP_W+1
-#define LCD_H           DISP_H+2
+#define LCD_W           DISP_W
+#define LCD_H           DISP_H
 
 
 
@@ -102,25 +102,25 @@ struct spi_lcd_cmd {
 struct spi_lcd_cmd cmds[] = {
 /*   cmd                数据长度    发送完成之后的延时 */
     {ST7735_SleepOut,       0,      120},
-    {ST7735_FullColor,      3,      10},
-    {ST7735_8Colors,        3,      10},
-    {ST7735_InPartialMode,  6,      10},
-    {ST7735_INVCTR,         1,      10},
-    {ST7735_PWCTR1,         3,      10},
-    {ST7735_PWCTR2,         1,      10},
-    {ST7735_PWCTR3,         2,      10},
-    {ST7735_PWCTR4,         2,      10},
-    {ST7735_PWCTR5,         2,      10},
-    {ST7735_VMCTR1,         1,      10},
-    {ST7735_MADCTL,         1,      10},
-    {ST7735_GMCTRP1,        16,     10},
-    {ST7735_GMCTRN1,        16,     10},
-    {ST7735_CASET,          4,      10},
-    {ST7735_RASET,          4,      10},
-    {ST7735_TEST,           1,      10},
-    {ST7735_DIS_RAM_PW,     1,      10},
-    {ST7735_COLMOD,         1,      10},
-    {ST7735_DISPON,         0,      10}
+    {ST7735_FullColor,      3,      1},
+    {ST7735_8Colors,        3,      1},
+    {ST7735_InPartialMode,  6,      1},
+    {ST7735_INVCTR,         1,      1},
+    {ST7735_PWCTR1,         3,      1},
+    {ST7735_PWCTR2,         1,      1},
+    {ST7735_PWCTR3,         2,      1},
+    {ST7735_PWCTR4,         2,      1},
+    {ST7735_PWCTR5,         2,      1},
+    {ST7735_VMCTR1,         1,      1},
+    {ST7735_MADCTL,         1,      1},
+    {ST7735_GMCTRP1,        16,     1},
+    {ST7735_GMCTRN1,        16,     1},
+    {ST7735_CASET,          4,      1},
+    {ST7735_RASET,          4,      1},
+    {ST7735_TEST,           1,      1},
+    {ST7735_DIS_RAM_PW,     1,      1},
+    {ST7735_COLMOD,         1,      1},
+    {ST7735_DISPON,         0,      1}
 };
 
 /* st7735s数据集 */
@@ -263,11 +263,11 @@ void Address_set(struct st7735s_dev *dev,unsigned int x1,unsigned int y1,unsigne
 { 
     write_command(dev,ST7735_CASET);
     write_data_u16(dev, x1);
-    write_data_u16(dev, x2);
+    write_data_u16(dev, x2 + 2);
 
     write_command(dev,ST7735_RASET);
     write_data_u16(dev, y1);
-    write_data_u16(dev, y2);
+    write_data_u16(dev, y2 + 1);
 
     write_command(dev,ST7735_RAMWR);
 }
@@ -278,7 +278,7 @@ void Address_set(struct st7735s_dev *dev,unsigned int x1,unsigned int y1,unsigne
 void LCD_Set_color(struct st7735s_dev *dev, u16 Color)
 {
     u16 i,j;      
-    Address_set(dev,0,0,LCD_W-1,LCD_H-1);
+    Address_set(dev,0,0,LCD_W,LCD_H);
     for(i=0;i<LCD_W;i++)
     {
         for (j=0;j<LCD_H;j++)
@@ -312,7 +312,7 @@ void LCD_Set_area_color(struct st7735s_dev *dev, unsigned int x1, unsigned int y
 */
 void LCD_Set_point_color(struct st7735s_dev *dev, unsigned int x, unsigned int y, u16 Color)
 {
-    Address_set(dev,x,y,x,y);
+    Address_set(dev,x,y,x + 1,y + 1);
 
     write_data_u16(dev, Color);
 }
@@ -326,7 +326,7 @@ void LCD_Set_image(struct st7735s_dev *dev, const unsigned char *p) //显示图�
 
     LCD_Set_color(dev, WHITE); //清屏  
 
-    Address_set(dev,0,0,LCD_W-2,LCD_H-3);
+    Address_set(dev,0,0,LCD_W,LCD_H);
 
     for(i=0;i<20480;i++)
      {    
