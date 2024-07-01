@@ -1,0 +1,1 @@
+cmd_/home/wt/Linux/stm32mp157/Linux_Drivers/5-2_spi_lcd/spi_lcd_drv.mod := { echo  /home/wt/Linux/stm32mp157/Linux_Drivers/5-2_spi_lcd/spi_lcd_drv.o; echo; } > /home/wt/Linux/stm32mp157/Linux_Drivers/5-2_spi_lcd/spi_lcd_drv.mod

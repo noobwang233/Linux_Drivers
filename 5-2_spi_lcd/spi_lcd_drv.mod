@@ -1,0 +1,2 @@
+/home/wt/Linux/stm32mp157/Linux_Drivers/5-2_spi_lcd/spi_lcd_drv.o
+

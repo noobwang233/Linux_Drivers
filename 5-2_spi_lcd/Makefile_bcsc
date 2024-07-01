@@ -6,24 +6,20 @@
 # 请参考各开发板的高级用户使用手册
 
 MODULE_NAME := spi_lcd
-DTB_NAME := stm32mp157d-atk
+DTB_NAME := imx6ull-atk-mini-emmc
 DIRVER_NAME := $(MODULE_NAME)_drv
 APP_NAME := $(MODULE_NAME)_app
-KERNELDIR := $(shell pwd)/../../kernel
+KERNELDIR := $(shell pwd)/../../kernel/linux-imx_4.1.15
 CURRENT_PATH := $(shell pwd)
-OUTPUT_DIR := ~/Linux/stm32mp157/nfs/rootfs/lib/modules/5.4.31/$(MODULE_NAME)
-DTB_DIR := ~/Linux/stm32mp157/tftp
-
-# CC := arm-linux-gnueabihf-
-
+OUTPUT_DIR := ~/OSD_share/$(MODULE_NAME)
 
 obj-m += $(DIRVER_NAME).o
 # $(DIRVER_NAME)-objs = led_drv.o # 可以支持多个c文件
 build: kernel_modules copy
 
-copy: $(OUTPUT_DIR)/$(DIRVER_NAME).ko $(DTB_DIR)/$(DTB_NAME).dtb
+copy: $(OUTPUT_DIR)/$(DIRVER_NAME).ko $(OUTPUT_DIR)/$(DTB_NAME).dtb
 
-kernel_modules: $(OUTPUT_DIR) $(DIRVER_NAME).ko $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb
+kernel_modules: $(OUTPUT_DIR) $(DIRVER_NAME).ko $(DTB_NAME).dtb
 
 app: $(OUTPUT_DIR) $(OUTPUT_DIR)/$(APP_NAME)
 
@@ -40,10 +36,10 @@ $(DIRVER_NAME).ko: $(DIRVER_NAME).c *.h
 	@export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) M=$(CURRENT_PATH) modules
 
-$(DTB_DIR)/$(DTB_NAME).dtb: $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb
+$(OUTPUT_DIR)/$(DTB_NAME).dtb: $(DTB_NAME).dtb
 	cp $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb $(OUTPUT_DIR)/ -f
 
-$(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dtb: $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dts
+$(DTB_NAME).dtb: $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dts
 	@export ARCH=arm
 	@export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) $(DTB_NAME).dtb
