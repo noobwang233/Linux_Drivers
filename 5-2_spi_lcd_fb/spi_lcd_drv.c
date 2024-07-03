@@ -22,6 +22,7 @@
 #include <linux/fb.h>
 #include "image.h"
 #include "linux/printk.h"
+#include "linux/slab.h"
 #include "spi_transfer.h"
 #include "spi_lcd_drv.h"
 
@@ -103,7 +104,9 @@ struct spi_lcd_cmd {
 
 void st7735s_reginit(struct st7735s_dev *dev);
 void st7735s_fb_show(struct fb_info *fbi, struct spi_device *spi);
-
+static int st3775s_setcolreg(unsigned int regno, unsigned int red,
+                             unsigned int green, unsigned int blue,
+                             unsigned int trans, struct fb_info *fbi);
 /*-----------------------------------------------------------
  * 
  * 全局变量
@@ -162,6 +165,7 @@ struct fb_info *fbi;
 
 struct fb_ops fops = {
     .owner		= THIS_MODULE,
+    .fb_setcolreg   = st3775s_setcolreg,
     .fb_fillrect	= cfb_fillrect,
 	.fb_copyarea	= cfb_copyarea,
 	.fb_imageblit	= cfb_imageblit,
@@ -173,6 +177,57 @@ struct fb_ops fops = {
  * 
  *-----------------------------------------------------------
  */
+
+static u32 chan_to_field(unsigned int chan, struct fb_bitfield *bf)
+{
+	chan &= 0xffff;
+	chan >>= 16 - bf->length;
+	return chan << bf->offset;
+}
+
+static int st3775s_setcolreg(unsigned int regno, unsigned int red,
+			   unsigned int green, unsigned int blue,
+			   unsigned int trans, struct fb_info *fbi)
+{
+	u32 val;
+	int ret = 1;
+
+	dev_dbg(fbi->device, "%s, regno = %u\n", __func__, regno);
+
+	/*
+	 * If greyscale is true, then we convert the RGB value
+	 * to greyscale no matter what visual we are using.
+	 */
+	if (fbi->var.grayscale)
+		red = green = blue = (19595 * red + 38470 * green +
+				      7471 * blue) >> 16;
+	switch (fbi->fix.visual) {
+	case FB_VISUAL_TRUECOLOR:
+		/*
+		 * 16-bit True Colour.  We encode the RGB value
+		 * according to the RGB bitfield information.
+		 */
+		if (regno < 16) {
+			u32 *pal = fbi->pseudo_palette;
+
+			val = chan_to_field(red, &fbi->var.red);
+			val |= chan_to_field(green, &fbi->var.green);
+			val |= chan_to_field(blue, &fbi->var.blue);
+
+			pal[regno] = val;
+
+			ret = 0;
+		}
+		break;
+
+	case FB_VISUAL_STATIC_PSEUDOCOLOR:
+	case FB_VISUAL_PSEUDOCOLOR:
+		break;
+	}
+
+	return ret;
+}
+
 
 int fb_thread_func(void *data)
 {
@@ -294,7 +349,6 @@ void st7735s_reginit(struct st7735s_dev *dev)
 
 int st7735s_fb_create(struct spi_device *spi) //此函数在spi设备驱动的probe函数里被调用
 {
-    dma_addr_t phy_addr;       /* 物理地址 */
     struct device_node *pnd;
     u32 height;
     u32 width;
@@ -322,7 +376,6 @@ int st7735s_fb_create(struct spi_device *spi) //此函数在spi设备驱动的pr
         return -1;
     }
 
-
     /* 2. 设置fb_info */
     /* 2.1 设置var */
     fbi->var.xres = width;          /* 分辨率 */
@@ -340,46 +393,45 @@ int st7735s_fb_create(struct spi_device *spi) //此函数在spi设备驱动的pr
 
     /* 2.2 设置fix */
     strcpy(fbi->fix.id, "st7735s_fb");
+    fbi->fix.line_length = fbi->var.xres * fbi->var.bits_per_pixel / 8;
     // 物理内存大小
     fbi->fix.smem_len = fbi->var.xres * fbi->var.yres * fbi->var.bits_per_pixel / 8;
 
-    // 设置DMA掩码
-    ret = dma_set_mask_and_coherent(&spi->dev, DMA_BIT_MASK(32));
-    if (ret) {
-        dev_err(&spi->dev, "Failed to set 32-bit DMA mask: %d\n", ret);
-        ret = dma_set_mask_and_coherent(&spi->dev, DMA_BIT_MASK(24));
-        if (ret) {
-            dev_err(&spi->dev, "Failed to set 24-bit DMA mask: %d\n", ret);
-            goto free_framebuffer;
-        }
-    }
-
     // 虚拟内存地址和大小
-    fbi->screen_base = dma_alloc_coherent(&spi->dev, fbi->fix.smem_len, &phy_addr, GFP_KERNEL);
+    fbi->screen_base = devm_kzalloc(&spi->dev, fbi->fix.smem_len, GFP_KERNEL);
     if (fbi->screen_base == NULL) {
         printk("screen base alloc error!\n");
         goto free_framebuffer;
     }
     fbi->screen_size = fbi->fix.smem_len;
     // 显存的物理地址
-    fbi->fix.smem_start = phy_addr;
+    fbi->fix.smem_start = __pa(fbi->screen_base);
     fbi->fix.type = FB_TYPE_PACKED_PIXELS;
     fbi->fix.visual = FB_VISUAL_TRUECOLOR;
 
     /* 3. 设置fbops */
     fbi->fbops = &fops;
 
-    /* 4. 注册fb_info */
+    /* 4. 设置调色板 */
+    fbi->pseudo_palette = devm_kzalloc(&spi->dev, fbi->fix.smem_len, GFP_KERNEL);
+    if (fbi->pseudo_palette == NULL) {
+        printk("pseudo_palette alloc error!\n");
+        goto free_screen_mem;
+    }
+
+    /* 5. 注册fb_info */
     ret = register_framebuffer(fbi);
     if (ret) {
-        printk("register framebuffer device error\n");
-        goto free_screen_mem;
+        printk("register framebuffer device error, err code: %d\n", ret);
+        goto free_pseudo_palette;
     }
 
     return 0;
 
+free_pseudo_palette:
+    devm_kfree(&spi->dev, fbi->pseudo_palette);
 free_screen_mem:
-    dmam_free_coherent(&spi->dev, fbi->screen_size, fbi->screen_base, fbi->fix.smem_start);
+    devm_kfree(&spi->dev, fbi->screen_base);
 free_framebuffer:
     framebuffer_release(fbi);
     return -ENOMEM;
@@ -391,10 +443,11 @@ free_framebuffer:
  * 
  *-----------------------------------------------------------
  */
-void st7735s_fb_delete(void) //此函数在spi设备驱动remove时被调用
+void st7735s_fb_delete(struct spi_device *spi) //此函数在spi设备驱动remove时被调用
 {
     unregister_framebuffer(fbi);
-    dma_free_coherent(NULL, fbi->screen_size, fbi->screen_base, fbi->fix.smem_start);
+    devm_kfree(&spi->dev, fbi->pseudo_palette);
+    devm_kfree(&spi->dev, fbi->screen_base);
     framebuffer_release(fbi);
 }
 
@@ -526,7 +579,7 @@ static int st7735s_probe(struct spi_device *spi)
     return 0;
 
 fb_delete:
-    st7735s_fb_delete();
+    st7735s_fb_delete(spi);
 free_bl:
     gpio_free(st7735sdev.bl_gpio);
 
@@ -557,7 +610,7 @@ static int st7735s_remove(struct spi_device *spi)
     printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
     kthread_stop(data->thread); //让刷图线程退出
     /* 注销fb */
-    st7735s_fb_delete();
+    st7735s_fb_delete(spi);
     gpio_free(st7735sdev.bl_gpio);
     gpio_free(st7735sdev.dc_gpio);
     gpio_free(st7735sdev.res_gpio);
