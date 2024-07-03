@@ -14,7 +14,7 @@ CURRENT_PATH := $(shell pwd)
 OUTPUT_DIR := ~/OSD_share/$(MODULE_NAME)
 
 obj-m += $(DIRVER_NAME).o
-# $(DIRVER_NAME)-objs = led_drv.o # 可以支持多个c文件
+$(DIRVER_NAME)-objs = spi_lcd_drv.o  spi_transfer.o# 可以支持多个c文件
 build: kernel_modules copy
 
 copy: $(OUTPUT_DIR)/$(DIRVER_NAME).ko $(OUTPUT_DIR)/$(DTB_NAME).dtb
@@ -31,7 +31,7 @@ $(OUTPUT_DIR):
 $(OUTPUT_DIR)/$(DIRVER_NAME).ko: $(DIRVER_NAME).ko
 	cp $(DIRVER_NAME).ko $(OUTPUT_DIR)/ -f
 
-$(DIRVER_NAME).ko: $(DIRVER_NAME).c *.h
+$(DIRVER_NAME).ko: *.c *.h
 	@export ARCH=arm
 	@export CROSS_COMPILE=arm-linux-gnueabihf-
 	$(MAKE) -C $(KERNELDIR) M=$(CURRENT_PATH) modules

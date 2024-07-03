@@ -45,7 +45,7 @@ $(DTB_NAME).dtb: $(KERNELDIR)/arch/arm/boot/dts/$(DTB_NAME).dts
 	$(MAKE) -C $(KERNELDIR) $(DTB_NAME).dtb
 
 $(OUTPUT_DIR)/$(APP_NAME): $(APP_NAME).c
-	arm-linux-gnueabihf-gcc -o $(APP_NAME) $(APP_NAME).c
+	arm-linux-gnueabihf-gcc -o $(APP_NAME) $(APP_NAME).c $(LFLAGS)
 	cp $(APP_NAME)  $(OUTPUT_DIR)/
 
 .PHONY: clean clean_all

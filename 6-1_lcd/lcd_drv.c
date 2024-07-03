@@ -1,12 +1,25 @@
 #include "linux/dma-mapping.h"
-#include "linux/fb.h"
-#include "linux/gfp.h"
+#include "linux/platform_device.h"
+#include "linux/string.h"
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/errno.h>
 #include <linux/fb.h>
 
+/************************ 宏定义 ****************************/
+#define DRIVER_NAME "LCD_imx6ull"
+
+
+
+/************************ 函数声明 ****************************/
+static int lcd_probe(struct platform_device *pdev);
+
+static int lcd_remove(struct platform_device *pdev);
+
+
+
+/************************ 全局变量 ****************************/
 static struct fb_info *lcd_fb_info;
 
 static struct fb_ops lcd_ops = {
@@ -16,17 +29,27 @@ static struct fb_ops lcd_ops = {
 	.fb_imageblit = sys_imageblit,
 };
 
+static const struct of_device_id lcd_dt_ids[] = {
+	{ .compatible = "wt,imx6ull_lcd" },
+	{ /* sentinel */ }
+};
 
-/*
- * @description : 驱动入口函数
- * @param : 无
- * @return
- */
-static int __init lcd_init(void)
+static struct platform_driver lcd_driver = {
+	.probe = lcd_probe,
+	.remove = lcd_remove,
+	.driver = {
+		   .name = DRIVER_NAME,
+		   .of_match_table = lcd_dt_ids,
+	},
+};
+
+
+
+
+/************************ 函数定义 ****************************/
+static int lcd_probe(struct platform_device *pdev)
 {
     dma_addr_t phy_addr;
-
-    printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
 
     /* 1. 分配fb_info结构体空间 */
     lcd_fb_info = framebuffer_alloc(0, NULL);
@@ -46,7 +69,9 @@ static int __init lcd_init(void)
     lcd_fb_info->var.blue.length = 8;
 
     /* 2.2 设置fix */
-    lcd_fb_info->fix.smem_len = lcd_fb_info->var.xres * lcd_fb_info->var.yres * 3u;
+    strcpy(lcd_fb_info->fix.id, "lcd");
+    if (lcd_fb_info->var.bits_per_pixel == 24)		//如果采用3个字节为颜色像素需要乘4，
+        lcd_fb_info->fix.smem_len = lcd_fb_info->var.xres * lcd_fb_info->var.yres * 4u;
 
     lcd_fb_info->screen_base = dma_alloc_writecombine(NULL, lcd_fb_info->fix.smem_len, &phy_addr, GFP_KERNEL);
     lcd_fb_info->fix.smem_start = phy_addr;         /* 物理地址 */
@@ -62,6 +87,32 @@ static int __init lcd_init(void)
     /* 5. 硬件初始化 */
 
     return 0;
+
+}
+
+static int lcd_remove(struct platform_device *dev)
+{
+    printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
+
+    /* 1.注销fb_info */
+    unregister_framebuffer(lcd_fb_info);
+
+    /* 2.释放fb_info的空间 */
+    framebuffer_release(lcd_fb_info);
+
+    return 0;
+}
+
+/*
+ * @description : 驱动入口函数
+ * @param : 无
+ * @return
+ */
+static int __init lcd_init(void)
+{
+    printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
+
+    return platform_driver_register(&lcd_driver);
 }
 
 /*
@@ -73,12 +124,7 @@ static void __exit lcd_exit(void)
 {
     printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
 
-    /* 1.注销fb_info */
-    unregister_framebuffer(lcd_fb_info);
-
-    /* 2.释放fb_info的空间 */
-    framebuffer_release(lcd_fb_info);
-
+    platform_driver_unregister(&lcd_driver);
 }
 
 module_init(lcd_init);
