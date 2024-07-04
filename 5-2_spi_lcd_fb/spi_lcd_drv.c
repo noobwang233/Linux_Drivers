@@ -151,7 +151,7 @@ u8 spi_lcd_datas[] = {
     0x8A,0x2A,
     0x8A,0xEE,
     0x0E,
-    0xC0,// 0x36配置：横屏RGB 0xA0 | 竖屏RGB 0xC0 | 横屏BGE 0xA8 | 竖屏RGB 0xC8
+    0xA0,// 0x36配置：横屏RGB 0xA0 | 竖屏RGB 0xC0 | 横屏BGE 0xA8 | 竖屏RGB 0xC8
     0x0f,0x1a,0x0f,0x18,0x2f,0x28,0x20,0x22,0x1f,0x1b,0x23,0x37,0x00,0x07,0x02,0x10,
     0x0f,0x1b,0x0f,0x17,0x33,0x2c,0x29,0x2e,0x30,0x30,0x39,0x3f,0x00,0x07,0x03,0x10,
     0x00,0x00,0x00,0x7F,
@@ -282,7 +282,7 @@ void LCD_Set_color(struct spi_device *spi, u16 Color)
 /* framebuffer线程刷屏函数 */
 void st7735s_fb_show(struct fb_info *fbi, struct spi_device *spi)
 {
-    int y;
+    int x, y;
     u8 *p = (u8 *)(fbi->screen_base);
     u32 height = fbi->var.yres;
     u32 width = fbi->var.xres;
@@ -293,7 +293,10 @@ void st7735s_fb_show(struct fb_info *fbi, struct spi_device *spi)
     data_len = width * fbi->var.bits_per_pixel / 8;
     for (y = 0; y < height; y++)
     {
-        write_datas(spi, p + (y * data_len), data_len);
+        for (x = 0; x < width; x++)
+        {
+            write_data_u16(spi,*(u16 *) (p + (y * data_len) + (x * 2)));
+        }
     }
 }
 
@@ -555,7 +558,7 @@ static int st7735s_probe(struct spi_device *spi)
     }
 
     /* 5. 初始化spi_device */
-    spi->mode = SPI_MODE_2;         /*MODE2，CPOL=1，CPHA=0*/
+    spi->mode = SPI_MODE_0;         /*MODE0，CPOL=0，CPHA=0*/
     spi_setup(spi);
     st7735sdev.spi = spi;
 
