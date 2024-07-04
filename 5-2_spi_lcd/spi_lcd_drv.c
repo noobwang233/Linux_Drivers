@@ -86,7 +86,7 @@ struct st7735s_dev {
     int dc_gpio;                /* 命令选择引脚 */
     int res_gpio;               /* 屏幕复位引脚 */
     int bl_gpio;                /* 背光引脚     */
-    int cs_gpio;                /* 背光引脚     */
+    int cs_gpio;                /* 片选引脚     */
 };
 static struct st7735s_dev st7735sdev;
 
@@ -187,10 +187,14 @@ static void st7735s_write_onereg(struct st7735s_dev *dev, u8 buf)
 */
 void write_command(struct st7735s_dev *dev, u8 cmd)
 {
+    // cs 0
+    gpio_set_value(st7735sdev.cs_gpio, 0);
     // dc , command:0
     gpio_set_value(dev->dc_gpio, 0); 
     printk("wite cmd: 0x%x\n", cmd);
     st7735s_write_onereg(dev,cmd);
+    // cs 0
+    gpio_set_value(st7735sdev.cs_gpio, 1);
 }
 
 /*
@@ -198,14 +202,13 @@ void write_command(struct st7735s_dev *dev, u8 cmd)
 */
 static void write_datas(struct st7735s_dev *dev, u8 *data,int len)
 {
-    // u32 i = 0;
+    // cs 0
+    gpio_set_value(st7735sdev.cs_gpio, 0);
 
     gpio_set_value(dev->dc_gpio, 1);
-    // printk("wite data len: %d\n", len);
-    // for (i = 0; i < len; i++) {
-    //     printk("index: %d data: 0x%x\n", i, data[i]);
-    // }
     st7735s_write_regs(dev, data, len);
+    // cs 0
+    gpio_set_value(st7735sdev.cs_gpio, 1);
 }
 
 /*
@@ -405,6 +408,7 @@ void st7735s_reginit(struct st7735s_dev *dev)
   */
 static int st7735s_probe(struct spi_device *spi)
 {
+    struct device_node *pnd;
     int ret = 0;
 
     printk("===========%s %d=============\n", __FUNCTION__, __LINE__);
@@ -430,6 +434,18 @@ static int st7735s_probe(struct spi_device *spi)
         return PTR_ERR(st7735sdev.device);
     }
 
+	/* 1. 获取设备树中cs片选信号，使用软件cs */
+    pnd = of_get_parent(spi->dev.of_node);
+	if(pnd == NULL) {
+		printk("ecspi1 node not find!\r\n");
+		goto get_err;
+	}
+	st7735sdev.cs_gpio = of_get_named_gpio(pnd, "cs-gpio", 0);
+	if(st7735sdev.cs_gpio < 0) {
+		printk("can't get cs-gpio!\r\n");
+		goto get_err;
+	}
+
     /* 获取设备树中Res复位, DC(data or command), BL GPIO ，请根据实际设备树修改*/
     st7735sdev.nd = spi->dev.of_node;
 
@@ -453,6 +469,10 @@ static int st7735s_probe(struct spi_device *spi)
 
     printk("res-gpio: %d  dc-gpio: %d  bl-gpio: %d\n", st7735sdev.res_gpio, st7735sdev.dc_gpio, st7735sdev.bl_gpio);
     /* 设置GPIO为输出，并且输出高电平 */
+    ret = gpio_direction_output(st7735sdev.cs_gpio, 1);
+    if(ret < 0) {
+        printk("can't set cs gpio!\r\n");
+    }
     ret = gpio_direction_output(st7735sdev.res_gpio, 1);
     if(ret < 0) {
         printk("can't set res gpio!\r\n");
@@ -466,8 +486,10 @@ static int st7735s_probe(struct spi_device *spi)
         printk("can't set bl gpio!\r\n");
     }
 
+
+
     /*初始化spi_device */
-    spi->mode = SPI_MODE_2;         /*MODE2，CPOL=1，CPHA=0*/
+    spi->mode = SPI_MODE_0;         /*MODE2，CPOL=1，CPHA=0*/
     spi_setup(spi);
     st7735sdev.private_data = spi;  /* 设置私有数据 */
     /* 初始化st7735s内部寄存器 */
