@@ -84,14 +84,14 @@ void key_time_function(unsigned long arg)
     if(value == atomic_read(&key_dev->key_value_temp))
     {
         //操作有效
-        printk("key status changed value %d\n", value);
+        // printk("key status changed value %d\n", value);
         //上报按键值
         input_report_key(key_dev->inputdev, key_dev->kcode, value);
         input_sync(key_dev->inputdev);
     }
     else
     {
-        printk("invalid %d\n", value);
+        // printk("invalid %d\n", value);
         //操作无效不更改键值
     }
     spin_unlock_irqrestore(&key_dev->lock, flags);
@@ -377,7 +377,7 @@ irqreturn_t key_irq_handler(int irq, void *dev)
 {
     u8 value;
     struct key_dev_t *key_dev = (struct key_dev_t *)dev;
-    printk("%s irq_handler!\n", (key_dev)->key_pdev->name);
+    // printk("%s irq_handler!\n", (key_dev)->key_pdev->name);
 
     spin_lock(&(key_dev->lock));
 
@@ -386,7 +386,7 @@ irqreturn_t key_irq_handler(int irq, void *dev)
         value = !value;
     }
     atomic_set(&(key_dev->key_value_temp), value);
-    printk("gpio %d key_value_temp %d!\n",(key_dev)->gpio, value);
+    // printk("gpio %d key_value_temp %d!\n",(key_dev)->gpio, value);
 
     mod_timer(&(key_dev->timer), jiffies + msecs_to_jiffies(15));//延迟15ms
 
