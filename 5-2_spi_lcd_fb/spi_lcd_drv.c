@@ -293,10 +293,11 @@ void st7735s_fb_show(struct fb_info *fbi, struct spi_device *spi)
     data_len = width * fbi->var.bits_per_pixel / 8;
     for (y = 0; y < height; y++)
     {
-        for (x = 0; x < width; x++)
-        {
-            write_data_u16(spi,*(u16 *) (p + (y * data_len) + (x * 2)));
-        }
+        write_datas(spi, (p + (y * data_len)), data_len);
+        // for (x = 0; x < width; x++)
+        // {
+        //     write_data_u16(spi,*(u16 *) (p + (y * data_len) + (x * 2)));
+        // }
     }
 }
 

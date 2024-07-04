@@ -4,6 +4,8 @@
 #include <linux/gpio.h>
 #include "spi_lcd_drv.h"
 
+#define ST_PAGE_SIZE 64
+
 /*
  * @description    : 向st7735s多个寄存器写入数据
  * @param - dev:  st7735s设备
@@ -50,11 +52,22 @@ void write_command(struct spi_device *spi, u8 cmd)
 */
 void write_datas(struct spi_device *spi, u8 *data,int len)
 {
+    int i = 0;
+    int index = 0;
     // cs 0
     gpio_set_value(st7735sdev.cs_gpio, 0);
     // dc , data:1
     gpio_set_value(st7735sdev.dc_gpio, 1);
-    st7735s_write_regs(spi, data, len);
+
+    for( i= 0; i < len / ST_PAGE_SIZE; i++)
+    {
+        index = i * ST_PAGE_SIZE;
+        st7735s_write_regs(spi, data + (index), ST_PAGE_SIZE);
+    }
+    if ((len % ST_PAGE_SIZE) != 0) {
+        st7735s_write_regs(spi, data + (index), (len % ST_PAGE_SIZE));
+    }
+
     // cs 1
     gpio_set_value(st7735sdev.cs_gpio, 1);
 }
