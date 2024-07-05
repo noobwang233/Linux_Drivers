@@ -5,8 +5,8 @@
 #include <sys/ioctl.h>
 #include <linux/watchdog.h>
 #include <sys/mman.h>
-#include "mxcfb.h"
 #include <unistd.h>
+#include <linux/fb.h>
 
 #define FB_NAME "/dev/fb0"
 
