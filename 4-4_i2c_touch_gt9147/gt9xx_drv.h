@@ -50,36 +50,13 @@
 //***************************PART1:ON/OFF define*******************************
 #define GTP_CUSTOM_CFG        0	   
 #define GTP_CHANGE_X2Y        0	   //swap x y
-#define GTP_DRIVER_SEND_CFG   0	   //driver send config
+#define GTP_DRIVER_SEND_CFG   1	   //driver send config
 #define GTP_HAVE_TOUCH_KEY    0
 #define GTP_POWER_CTRL_SLEEP  0    //power off when suspend
-#define GTP_ICS_SLOT_REPORT   0    // slot protocol 
 
-#define GTP_AUTO_UPDATE       0    // auto update fw by .bin file as default
-#define GTP_HEADER_FW_UPDATE  0    // auto update fw by gtp_default_FW in gt9xx_firmware.h, function together with GTP_AUTO_UPDATE
-#define GTP_AUTO_UPDATE_CFG   0    // auto update config by .cfg file, function together with GTP_AUTO_UPDATE
-
-#define GTP_COMPATIBLE_MODE   0    // compatible with GT9XXF
-
-#define GTP_CREATE_WR_NODE    0
-#define GTP_ESD_PROTECT       0    // esd protection with a cycle of 2 seconds
-
-#define GTP_WITH_PEN          0
-#define GTP_PEN_HAVE_BUTTON   0    // active pen has buttons, function together with GTP_WITH_PEN
-
-#define GTP_GESTURE_WAKEUP    0    // gesture wakeup
-
-#define GTP_DEBUG_ON          1
-#define GTP_DEBUG_ARRAY_ON    1
-#define GTP_DEBUG_FUNC_ON     1
-
-#if GTP_COMPATIBLE_MODE
-typedef enum
-{
-    CHIP_TYPE_GT9  = 0,
-    CHIP_TYPE_GT9F = 1,
-} CHIP_TYPE_T;
-#endif
+#define GTP_DEBUG_ON          0
+#define GTP_DEBUG_ARRAY_ON    0
+#define GTP_DEBUG_FUNC_ON     0
 
 struct goodix_ts_data {
     spinlock_t irq_lock;
@@ -107,24 +84,6 @@ struct goodix_ts_data {
 	struct early_suspend early_suspend;
 #endif
 
-#if GTP_WITH_PEN
-    struct input_dev *pen_dev;
-#endif
-
-#if GTP_ESD_PROTECT
-    spinlock_t esd_lock;
-    u8  esd_running;
-    s32 clk_tick_cnt;
-#endif
-#if GTP_COMPATIBLE_MODE
-    u16 bak_ref_len;
-    s32 ref_chk_fs_times;
-    s32 clk_chk_fs_times;
-    CHIP_TYPE_T chip_type;
-    u8 rqst_processing;
-    u8 is_950;
-#endif
-    
 };
 
 extern u16 show_len;
