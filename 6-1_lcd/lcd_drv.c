@@ -23,10 +23,17 @@ static int lcd_remove(struct platform_device *pdev);
 static struct fb_info *lcd_fb_info;
 
 static struct fb_ops lcd_ops = {
-	.owner = THIS_MODULE,
-	.fb_fillrect = sys_fillrect,
-	.fb_copyarea = sys_copyarea,
-	.fb_imageblit = sys_imageblit,
+    .owner = THIS_MODULE,
+    .fb_check_var = mxsfb_check_var,
+    .fb_set_par = mxsfb_set_par,
+    .fb_setcolreg = mxsfb_setcolreg,
+    .fb_ioctl = mxsfb_ioctl,
+    .fb_blank = mxsfb_blank,
+    .fb_pan_display = mxsfb_pan_display,
+    .fb_mmap = mxsfb_mmap,
+    .fb_fillrect = cfb_fillrect,
+    .fb_copyarea = cfb_copyarea,
+    .fb_imageblit = cfb_imageblit,
 };
 
 static const struct of_device_id lcd_dt_ids[] = {
