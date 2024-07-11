@@ -22,7 +22,6 @@
 #define FT_REG_THGROUP          0x80
 #define FT_REG_POINT_RATE       0x88
 
-#define GTP_CONFIG_OF 1
 static const char *goodix_ts_name = "goodix-ts";
 static const char *goodix_input_phys = "input/ts";
 static struct workqueue_struct *goodix_wq;
@@ -60,9 +59,9 @@ static const struct file_operations config_proc_ops = {
 static int gtp_register_powermanger(struct goodix_ts_data *ts);
 static int gtp_unregister_powermanger(struct goodix_ts_data *ts);
 
-#ifdef GTP_CONFIG_OF
+
 int gtp_parse_dt_cfg(struct device *dev, u8 *cfg, int *cfg_len, u8 sid);
-#endif
+
 
 /*******************************************************
 Function:
@@ -667,32 +666,6 @@ static s32 gtp_init_panel(struct goodix_ts_data *ts)
     u8 drv_cfg_version;
     u8 flash_cfg_version;
 
-/* if defined CONFIG_OF, parse config data from dtsi
- *  else parse config data form header file.
- */
-#ifndef    GTP_CONFIG_OF 
-    u8 cfg_info_group0[] = CTP_CFG_GROUP0;
-    u8 cfg_info_group1[] = CTP_CFG_GROUP1;
-    u8 cfg_info_group2[] = CTP_CFG_GROUP2;
-    u8 cfg_info_group3[] = CTP_CFG_GROUP3;
-    u8 cfg_info_group4[] = CTP_CFG_GROUP4;
-    u8 cfg_info_group5[] = CTP_CFG_GROUP5;
-
-    u8 *send_cfg_buf[] = {cfg_info_group0,cfg_info_group1,
-                        cfg_info_group2, cfg_info_group3,
-                        cfg_info_group4, cfg_info_group5};
-    u8 cfg_info_len[] = { CFG_GROUP_LEN(cfg_info_group0),
-                          CFG_GROUP_LEN(cfg_info_group1),
-                          CFG_GROUP_LEN(cfg_info_group2),
-                          CFG_GROUP_LEN(cfg_info_group3),
-                          CFG_GROUP_LEN(cfg_info_group4),
-                          CFG_GROUP_LEN(cfg_info_group5)};
-    
-    GTP_DEBUG("Config Groups\' Lengths: %d, %d, %d, %d, %d, %d", 
-        cfg_info_len[0], cfg_info_len[1], cfg_info_len[2], cfg_info_len[3],
-        cfg_info_len[4], cfg_info_len[5]);
-#endif
-
     /* check firmware */
     ret = gtp_i2c_read_dbl_check(ts->client, 0x41E4, opr_buf, 1);
     if (SUCCESS == ret)
@@ -725,7 +698,6 @@ static s32 gtp_init_panel(struct goodix_ts_data *ts)
     GTP_INFO("Sensor_ID: %d", sensor_id);
 
     /* parse config data*/
-#ifdef GTP_CONFIG_OF    
     GTP_DEBUG("Get config data from device tree.");
     ret = gtp_parse_dt_cfg(&ts->client->dev, &config[GTP_ADDR_LENGTH], &ts->gtp_cfg_len, sensor_id);
     if (ret < 0) {
@@ -733,18 +705,6 @@ static s32 gtp_init_panel(struct goodix_ts_data *ts)
         ts->pnl_init_error = 1;
         return -1;
     }
-#else 
-    GTP_DEBUG("Get config data from header file.");
-    if ((!cfg_info_len[1]) && (!cfg_info_len[2]) && 
-        (!cfg_info_len[3]) && (!cfg_info_len[4]) && 
-        (!cfg_info_len[5]))
-    {
-        sensor_id = 0; 
-    }
-    ts->gtp_cfg_len = cfg_info_len[sensor_id];
-    memset(&config[GTP_ADDR_LENGTH], 0, GTP_CONFIG_MAX_LENGTH);
-    memcpy(&config[GTP_ADDR_LENGTH], send_cfg_buf[sensor_id], ts->gtp_cfg_len);
-#endif
 
     printk("Config group%d used,length: %d", sensor_id, ts->gtp_cfg_len);
 
@@ -1136,7 +1096,6 @@ static s8 gtp_request_input_dev(struct goodix_ts_data *ts)
 /* 
  * Devices Tree support, 
 */
-#ifdef GTP_CONFIG_OF
 /**
  * gtp_parse_dt - parse platform infomation form devices tree.
  */
@@ -1168,6 +1127,11 @@ int gtp_parse_dt_cfg(struct device *dev, u8 *cfg, int *cfg_len, u8 sid)
     snprintf(cfg_name, sizeof(cfg_name), "goodix,cfg-group%d", (sid % 10));
     prop = of_find_property(np, cfg_name, cfg_len);
     if (!prop || !prop->value || *cfg_len == 0 || *cfg_len > GTP_CONFIG_MAX_LENGTH) {
+        if (!prop) {
+            printk("can not find %s \n", cfg_name);
+        }
+        printk("cfg_name %s \n", cfg_name);
+        printk("cfg_len %d \n", *cfg_len);
         return -1;/* failed */
     } else {
         memcpy(cfg, prop->value, *cfg_len);
@@ -1223,7 +1187,6 @@ ERR_GET_VCC:
     regulator_put(vdd_ana);
     return ret;
 }
-#endif
 
 /*******************************************************
 Function:
@@ -1262,7 +1225,7 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
         return -ENOMEM;
     }
 
-#ifdef GTP_CONFIG_OF    /* device tree support */
+    /* device tree support */
     if (client->dev.of_node) {
         gtp_parse_dt(&client->dev);
     }
@@ -1271,12 +1234,8 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
         GTP_ERROR("GTP power on failed.");
         return -EINVAL;
     }
-#else            /* use gpio defined in gt9xx.h */
-#if GTP_RST_GPIO
-    gtp_rst_gpio = GTP_RST_PORT;
-#endif
-    gtp_int_gpio = GTP_INT_PORT;
-#endif
+
+
 
     INIT_WORK(&ts->work, goodix_ts_work_func);
     ts->client = client;
@@ -1583,12 +1542,11 @@ static int gtp_unregister_powermanger(struct goodix_ts_data *ts)
 
 /* end */
 
-#ifdef GTP_CONFIG_OF
+
 static const struct of_device_id goodix_match_table[] = {
         {.compatible = "goodix,gt9xx",},
         { },
 };
-#endif
 
 static const struct i2c_device_id goodix_ts_id[] = {
     { GTP_I2C_NAME, 0 },
@@ -1602,9 +1560,8 @@ static struct i2c_driver goodix_ts_driver = {
     .driver = {
         .name     = GTP_I2C_NAME,
         .owner    = THIS_MODULE,
-#ifdef GTP_CONFIG_OF
         .of_match_table = goodix_match_table,
-#endif
+
 #if !defined(CONFIG_FB) && defined(CONFIG_PM)
     .pm          = &gtp_pm_ops,
 #endif
