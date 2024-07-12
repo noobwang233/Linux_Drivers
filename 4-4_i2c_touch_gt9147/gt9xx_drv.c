@@ -31,31 +31,11 @@ int gtp_int_gpio;
 u8 config[GTP_CONFIG_MAX_LENGTH + GTP_ADDR_LENGTH]
                 = {GTP_REG_CONFIG_DATA >> 8, GTP_REG_CONFIG_DATA & 0xff};
 
-#if GTP_HAVE_TOUCH_KEY
-    static const u16 touch_key_array[] = GTP_KEY_TAB;
-    #define GTP_MAX_KEY_NUM  (sizeof(touch_key_array)/sizeof(touch_key_array[0]))
-    
-#if GTP_DEBUG_ON
-    static const int  key_codes[] = {KEY_HOME, KEY_BACK, KEY_MENU, KEY_SEARCH};
-    static const char *key_names[] = {"Key_Home", "Key_Back", "Key_Menu", "Key_Search"};
-#endif
-    
-#endif
-
 static s8 gtp_i2c_test(struct i2c_client *client);
 void gtp_reset_guitar(struct i2c_client *client, s32 ms);
 s32 gtp_send_cfg(struct i2c_client *client);
 void gtp_int_sync(s32 ms);
 
-static ssize_t gt91xx_config_read_proc(struct file *, char __user *, size_t, loff_t *);
-static ssize_t gt91xx_config_write_proc(struct file *, const char __user *, size_t, loff_t *);
-
-static struct proc_dir_entry *gt91xx_config_proc = NULL;
-static const struct file_operations config_proc_ops = {
-    .owner = THIS_MODULE,
-    .read = gt91xx_config_read_proc,
-    .write = gt91xx_config_write_proc,
-};
 static int gtp_register_powermanger(struct goodix_ts_data *ts);
 static int gtp_unregister_powermanger(struct goodix_ts_data *ts);
 
@@ -401,33 +381,6 @@ static void goodix_ts_work_func(struct work_struct *work)
         memcpy(&point_data[12], &buf[2], 8 * (touch_num - 1));
     }
 
-#if (GTP_HAVE_TOUCH_KEY)
-    key_value = point_data[3 + 8 * touch_num];
-    
-    if(key_value || pre_key)
-    {
-    #if GTP_HAVE_TOUCH_KEY
-        if (!pre_touch)
-        {
-            for (i = 0; i < GTP_MAX_KEY_NUM; i++)
-            {
-            #if GTP_DEBUG_ON
-                for (ret = 0; ret < 4; ++ret)
-                {
-                    if (key_codes[ret] == touch_key_array[i])
-                    {
-                        GTP_DEBUG("Key: %s %s", key_names[ret], (key_value & (0x01 << i)) ? "Down" : "Up");
-                        break;
-                    }
-                }
-            #endif
-                input_report_key(ts->input_dev, touch_key_array[i], key_value & (0x01<<i));   
-            }
-            touch_num = 0;  // shield fingers
-        }
-    #endif
-    }
-#endif
     pre_key = key_value;
 
     //GTP_DEBUG("pre_touch:%02x, finger:%02x.", pre_touch, finger);
@@ -804,67 +757,6 @@ static s32 gtp_init_panel(struct goodix_ts_data *ts)
 
 }
 
-static ssize_t gt91xx_config_read_proc(struct file *file, char __user *page, size_t size, loff_t *ppos)
-{
-    char *ptr = page;
-    char temp_data[GTP_CONFIG_MAX_LENGTH + 2] = {0x80, 0x47};
-    int i;
-    if (*ppos)
-    {
-        return 0;
-    }
-    ptr += sprintf(ptr, "==== GT9XX config init value====\n");
-
-    for (i = 0 ; i < GTP_CONFIG_MAX_LENGTH ; i++)
-    {
-        ptr += sprintf(ptr, "0x%02X ", config[i + 2]);
-
-        if (i % 8 == 7)
-            ptr += sprintf(ptr, "\n");
-    }
-
-    ptr += sprintf(ptr, "\n");
-
-    ptr += sprintf(ptr, "==== GT9XX config real value====\n");
-    gtp_i2c_read(i2c_connect_client, temp_data, GTP_CONFIG_MAX_LENGTH + 2);
-    for (i = 0 ; i < GTP_CONFIG_MAX_LENGTH ; i++)
-    {
-        ptr += sprintf(ptr, "0x%02X ", temp_data[i+2]);
-
-        if (i % 8 == 7)
-            ptr += sprintf(ptr, "\n");
-    }
-    *ppos += ptr - page;
-    return (ptr - page);
-}
-
-static ssize_t gt91xx_config_write_proc(struct file *filp, const char __user *buffer, size_t count, loff_t *off)
-{
-    s32 ret = 0;
-
-    GTP_DEBUG("write count %d\n", count);
-
-    if (count > GTP_CONFIG_MAX_LENGTH)
-    {
-        GTP_ERROR("size not match [%d:%d]\n", GTP_CONFIG_MAX_LENGTH, count);
-        return -EFAULT;
-    }
-
-    if (copy_from_user(&config[2], buffer, count))
-    {
-        GTP_ERROR("copy from user fail\n");
-        return -EFAULT;
-    }
-
-    ret = gtp_send_cfg(i2c_connect_client);
-
-    if (ret < 0)
-    {
-        GTP_ERROR("send config failed.");
-    }
-
-    return count;
-}
 /*******************************************************
 Function:
     Read chip version.
@@ -1034,9 +926,6 @@ Output:
 static s8 gtp_request_input_dev(struct goodix_ts_data *ts)
 {
     s8 ret = -1;
-#if GTP_HAVE_TOUCH_KEY
-    u8 index = 0;
-#endif
   
     GTP_DEBUG_FUNC();
   
@@ -1052,14 +941,6 @@ static s8 gtp_request_input_dev(struct goodix_ts_data *ts)
     ts->input_dev->keybit[BIT_WORD(BTN_TOUCH)] = BIT_MASK(BTN_TOUCH);
 
     __set_bit(INPUT_PROP_DIRECT, ts->input_dev->propbit);
-
-#if GTP_HAVE_TOUCH_KEY
-    for (index = 0; index < GTP_MAX_KEY_NUM; index++)
-    {
-        input_set_capability(ts->input_dev, EV_KEY, touch_key_array[index]);  
-    }
-#endif
-
 
 #if GTP_CHANGE_X2Y
     GTP_SWAP(ts->abs_x_max, ts->abs_y_max);
@@ -1107,7 +988,7 @@ static void gtp_parse_dt(struct device *dev)
 #if GTP_RST_PORT
     gtp_rst_gpio = of_get_named_gpio(np, "goodix,rst-gpio", 0);
 #endif
-        
+
 }
 
 /**
@@ -1137,55 +1018,6 @@ int gtp_parse_dt_cfg(struct device *dev, u8 *cfg, int *cfg_len, u8 sid)
         memcpy(cfg, prop->value, *cfg_len);
         return 0;
     }
-}
-
-/**
- * gtp_power_switch - power switch .
- * @on: 1-switch on, 0-switch off.
- * return: 0-succeed, -1-faileds
- */
-static int gtp_power_switch(struct i2c_client *client, int on)
-{
-    static struct regulator *vdd_ana;
-    static struct regulator *vcc_i2c;
-    int ret;
-    
-    if (!vdd_ana) {
-        vdd_ana = regulator_get(&client->dev, "vdd_ana");
-        if (IS_ERR(vdd_ana)) {
-            GTP_ERROR("regulator get of vdd_ana failed");
-            ret = PTR_ERR(vdd_ana);
-            vdd_ana = NULL;
-            return ret;
-        }
-    }
-
-    if (!vcc_i2c) {
-        vcc_i2c = regulator_get(&client->dev, "vcc_i2c");
-        if (IS_ERR(vcc_i2c)) {
-            GTP_ERROR("regulator get of vcc_i2c failed");
-            ret = PTR_ERR(vcc_i2c);
-            vcc_i2c = NULL;
-            goto ERR_GET_VCC;
-        }
-    }
-
-    if (on) {
-        GTP_DEBUG("GTP power on.");
-        ret = regulator_enable(vdd_ana);
-        udelay(2);
-        ret = regulator_enable(vcc_i2c);
-    } else {
-        GTP_DEBUG("GTP power off.");
-        ret = regulator_disable(vcc_i2c);
-        udelay(2);
-        ret = regulator_disable(vdd_ana);
-    }
-    return ret;
-    
-ERR_GET_VCC:
-    regulator_put(vdd_ana);
-    return ret;
 }
 
 /*******************************************************
@@ -1229,13 +1061,6 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
     if (client->dev.of_node) {
         gtp_parse_dt(&client->dev);
     }
-    ret = gtp_power_switch(client, 1);
-    if (ret) {
-        GTP_ERROR("GTP power on failed.");
-        return -EINVAL;
-    }
-
-
 
     INIT_WORK(&ts->work, goodix_ts_work_func);
     ts->client = client;
@@ -1273,17 +1098,6 @@ static int goodix_ts_probe(struct i2c_client *client, const struct i2c_device_id
         ts->abs_y_max = GTP_MAX_HEIGHT;
         ts->int_trigger_type = GTP_INT_TRIGGER;
         goto free_ts;
-    }
-    
-    // Create proc file system
-    gt91xx_config_proc = proc_create(GT91XX_CONFIG_PROC_FILE, 0666, NULL, &config_proc_ops);
-    if (gt91xx_config_proc == NULL)
-    {
-        GTP_ERROR("create_proc_entry %s failed\n", GT91XX_CONFIG_PROC_FILE);
-    }
-    else
-    {
-        GTP_INFO("create proc entry %s success", GT91XX_CONFIG_PROC_FILE);
     }
 
     ret = gtp_request_input_dev(ts);
@@ -1347,6 +1161,9 @@ static int goodix_ts_remove(struct i2c_client *client)
         }
     }   
     
+    #if GTP_RST_PORT
+        GTP_GPIO_FREE(gtp_rst_gpio);
+    #endif
     GTP_INFO("GTP driver removing...");
     i2c_set_clientdata(client, NULL);
     input_unregister_device(ts->input_dev);
@@ -1459,58 +1276,6 @@ static int gtp_fb_notifier_callback(struct notifier_block *noti, unsigned long e
 
     return 0;
 }
-#elif defined(CONFIG_PM)
-/* bus control the suspend/resume procedure */
-static int gtp_pm_suspend(struct device *dev)
-{
-    struct i2c_client *client = to_i2c_client(dev);
-    struct goodix_ts_data *ts = i2c_get_clientdata(client);
-
-    if (ts) {
-        GTP_DEBUG("Suspend by i2c pm.");
-        goodix_ts_suspend(ts);
-    }
-
-    return 0;
-}
-static int gtp_pm_resume(struct device *dev)
-{
-    struct i2c_client *client = to_i2c_client(dev);
-    struct goodix_ts_data *ts = i2c_get_clientdata(client);
-
-    if (ts) {
-        GTP_DEBUG("Resume by i2c pm.");
-        goodix_ts_resume(ts);
-    }
-
-    return 0;
-}
-
-static struct dev_pm_ops gtp_pm_ops = {
-    .suspend = gtp_pm_suspend,
-    .resume  = gtp_pm_resume,
-};
-
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-/* earlysuspend module the suspend/resume procedure */
-static void gtp_early_suspend(struct early_suspend *h)
-{
-    struct goodix_ts_data *ts = container_of(h, struct goodix_ts_data, early_suspend);
-
-    if (ts) {
-        GTP_DEBUG("Suspend by earlysuspend module.");
-        goodix_ts_suspend(ts);
-    }
-}
-static void gtp_early_resume(struct early_suspend *h)
-{
-    struct goodix_ts_data *ts = container_of(h, struct goodix_ts_data, early_suspend);
-
-    if (ts) {
-        GTP_DEBUG("Resume by earlysuspend module.");
-        goodix_ts_resume(ts);
-    }    
-}
 #endif
 
 static int gtp_register_powermanger(struct goodix_ts_data *ts)
@@ -1518,13 +1283,7 @@ static int gtp_register_powermanger(struct goodix_ts_data *ts)
 #if   defined(CONFIG_FB)
     ts->notifier.notifier_call = gtp_fb_notifier_callback;
     fb_register_client(&ts->notifier);
-    
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-    ts->early_suspend.level = EARLY_SUSPEND_LEVEL_BLANK_SCREEN + 1;
-    ts->early_suspend.suspend = goodix_ts_early_suspend;
-    ts->early_suspend.resume = goodix_ts_late_resume;
-    register_early_suspend(&ts->early_suspend);
-#endif    
+#endif
 
     return 0;
 }
@@ -1533,9 +1292,6 @@ static int gtp_unregister_powermanger(struct goodix_ts_data *ts)
 {
 #if   defined(CONFIG_FB)
         fb_unregister_client(&ts->notifier);
-        
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-        unregister_early_suspend(&ts->early_suspend);
 #endif
     return 0;
 }
@@ -1561,10 +1317,6 @@ static struct i2c_driver goodix_ts_driver = {
         .name     = GTP_I2C_NAME,
         .owner    = THIS_MODULE,
         .of_match_table = goodix_match_table,
-
-#if !defined(CONFIG_FB) && defined(CONFIG_PM)
-    .pm          = &gtp_pm_ops,
-#endif
     },
 };
 

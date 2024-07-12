@@ -43,20 +43,16 @@
 #include <linux/notifier.h>
 #include <linux/fb.h>
 #endif
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
-#endif
 
 //***************************PART1:ON/OFF define*******************************
-#define GTP_CUSTOM_CFG        1     // 客户定制配置开关，用于客户自行修改某些参数
-#define GTP_CHANGE_X2Y        0     //swap x y
-#define GTP_DRIVER_SEND_CFG   1     //driver send config
-#define GTP_HAVE_TOUCH_KEY    0     // 触摸按键开关，仅带有触摸按键的TP 需要打开
-#define GTP_POWER_CTRL_SLEEP  0     //power off when suspend
+#define GTP_CUSTOM_CFG        0     // 客户定制配置开关，用于客户自行修改某些参数
+#define GTP_CHANGE_X2Y        0     // swap x y
+#define GTP_DRIVER_SEND_CFG   1     // driver send config
+#define GTP_POWER_CTRL_SLEEP  0     // power off when suspend
 
-#define GTP_DEBUG_ON          0    // 调试信息开关，打开则输出调试信息
-#define GTP_DEBUG_ARRAY_ON    0    // 调试数组开关，用于调试时打印一片内存的内容
-#define GTP_DEBUG_FUNC_ON     0    // 调试函数开关，用于跟踪函数调用流程
+#define GTP_DEBUG_ON          0     // 调试信息开关，打开则输出调试信息
+#define GTP_DEBUG_ARRAY_ON    0     // 调试数组开关，用于调试时打印一片内存的内容
+#define GTP_DEBUG_FUNC_ON     0     // 调试函数开关，用于跟踪函数调用流程
 
 struct goodix_ts_data {
     spinlock_t irq_lock;
@@ -80,8 +76,6 @@ struct goodix_ts_data {
 
 #if   defined(CONFIG_FB)
 	struct notifier_block notifier;
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
-	struct early_suspend early_suspend;
 #endif
 
 };
@@ -94,13 +88,13 @@ extern int gtp_int_gpio;
 //*************************** PART2:TODO define **********************************
 // STEP_1(REQUIRED): Define Configuration Information Group(s)
 // Sensor_ID Map:
-/* sensor_opt1 sensor_opt2 Sensor_ID
-    GND         GND          0 
-    VDDIO      GND          1 
-    NC           GND          2 
-    GND         NC/300K    3 
-    VDDIO      NC/300K    4 
-    NC           NC/300K    5 
+/* sensor_opt1  sensor_opt2   Sensor_ID
+    GND         GND           0 
+    VDDIO       GND           1 
+    NC          GND           2 
+    GND         NC/300K       3 
+    VDDIO       NC/300K       4 
+    NC          NC/300K       5 
 */
 #define GTP_RST_PORT 1
 
@@ -129,10 +123,7 @@ extern int gtp_int_gpio;
 #endif
 #define GTP_MAX_TOUCH         5
 
-// STEP_4(optional): If keys are available and reported as keys, config your key info here                             
-#if GTP_HAVE_TOUCH_KEY
-    #define GTP_KEY_TAB  {KEY_MENU, KEY_HOME, KEY_BACK}
-#endif
+// STEP_4(optional): If keys are available and reported as keys, config your key info here
 
 //***************************PART3:OTHER define*********************************
 #define GTP_DRIVER_VERSION          "V2.4<2014/11/28>"
