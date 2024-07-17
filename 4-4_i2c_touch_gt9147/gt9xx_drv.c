@@ -897,6 +897,7 @@ static s8 gtp_request_irq(struct goodix_ts_data *ts)
                        ts);
     if (ret)
     {
+        /* 再申请中断失败的情况下， 使用定时器中断轮询 */
         GTP_ERROR("Request IRQ failed!ERRNO:%d.", ret);
         GTP_GPIO_AS_INPUT(gtp_int_gpio);
         GTP_GPIO_FREE(gtp_int_gpio);
@@ -1159,11 +1160,11 @@ static int goodix_ts_remove(struct i2c_client *client)
         {
             hrtimer_cancel(&ts->timer);
         }
-    }   
-    
     #if GTP_RST_PORT
         GTP_GPIO_FREE(gtp_rst_gpio);
     #endif
+    }
+
     GTP_INFO("GTP driver removing...");
     i2c_set_clientdata(client, NULL);
     input_unregister_device(ts->input_dev);
